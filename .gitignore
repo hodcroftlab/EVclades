@@ -1,6 +1,7 @@
 data/*
 results/*
 flu-results*
+RIVM
 
 .RData
 .Rhistory
@@ -8,6 +9,20 @@ flu-results*
 .snakemake
 .Rproj.user
 .env
+__pycache__
 
 *.Rproj
 LICENSE
+
+log.out
+R_packages*
+
+# unused scripts from fluclades
+midpoint.R
+get-metadata.py
+filter-prot.py
+concat-genes.py
+
+# still adapting R scripts
+# will be included as soon as it's adapted
+scripts/*.R
