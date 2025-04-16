@@ -1,0 +1,13 @@
+data/*
+results/*
+flu-results*
+
+.RData
+.Rhistory
+.vscode
+.snakemake
+.Rproj.user
+.env
+
+*.Rproj
+LICENSE
