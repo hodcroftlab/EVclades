@@ -79,7 +79,7 @@ rule relabel_fasta:
     input:
         fasta = "results/filtered_sequences_raw.fasta",
         metadata = "results/filtered_metadata_raw.tsv",
-        subgenotype = "data/RIVM_genotype.csv"
+        subgenotype = "data/RIVM_genotype_80.csv"
     output:
         "results/relabeled_seqs.fasta"
     shell:
@@ -258,20 +258,21 @@ rule auto_chainsaw:
         {output}
         """
 
-################################
-# !! R scripts are still in work !!
-################################
-
 rule plot_trees:
     """ 
     Create tree plots
     """
     input:
-        "treeplots.RData"  #       tree = "results/tree_raw.nwk"
+        tree = "results/tree.midpoint.nwk" 
     output:
-        "final_output.png"
+        "results/plots/treeplots.png",
+        "results/plots/inferred.pdf"
     shell:
-        "Rscript scripts/plot-trees.R"
+        "(Rscript scripts/plot-trees.R) >> log.out"
+
+################################
+# !! R scripts below are still in work !!
+################################
 
 
 rule chainsaw_plot:
