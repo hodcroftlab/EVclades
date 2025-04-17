@@ -3,6 +3,7 @@ import sys
 import csv
 from Bio import Phylo
 import argparse
+import ipdb
 
 description = """
 This script is used to generate the data required to produce Figures
@@ -18,12 +19,12 @@ parser.add_argument("outfile", type=argparse.FileType('w'), nargs="?", default=s
 args = parser.parse_args()
 
 if args.gene == "full":
-    cutoffs = [0.002, 0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 
-               0.01, 0.012, 0.014, 0.016, 0.018, 0.02, 0.022, 0.024, 0.026, 
-               0.028, 0.03, 0.032, 0.034, 0.036, 0.038, 0.04]
+    cutoffs = [0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 
+               0.01, 0.011, 0.012, 0.013, 0.014, 0.015,
+               0.016, 0.017, 0.018, 0.019, 0.02] # varying subtrees between 111 and 8
 else:
     cutoffs = [0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 0.14, 0.15, 
-               0.175, 0.2, 0.225, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5]
+               0.175, 0.2, 0.225, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5] # not yet adapted
 
 writer = csv.writer(args.outfile)
 writer.writerow(["cutoff", "nsubtrees", "mutual.inf", "normalized"])
@@ -31,6 +32,8 @@ for cutoff in cutoffs:
     phy = Phylo.read(args.infile, "newick")
     unroot(phy)
     subtrees = chainsaw(phy, cutoff)
+    ## Debugging
+    # ipdb.set_trace()
     minfo, norm_mi = mutual_info(subtrees, hema=(args.gene == 'full'))
     writer.writerow([cutoff, len(subtrees), minfo, norm_mi])
     args.outfile.flush()

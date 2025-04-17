@@ -22,8 +22,3 @@ midpoint.R
 get-metadata.py
 filter-prot.py
 concat-genes.py
-
-# still adapting R scripts
-# will be included as soon as it's adapted
-scripts/*.R
-!plot-trees.R

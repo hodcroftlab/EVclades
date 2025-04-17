@@ -20,10 +20,13 @@ INCL_PARAMS = False # include mindiv and maxpat in subtyping script -> if False,
 ## Run all rules in snakemake
 rule all:
     input:
-        "final_output.png",
-        "chainsaw-ha.pdf",
-        "gisaid-nseqs.pdf",
-        "subtree-grid.pdf"
+        "results/plots/chainsaw.pdf",
+        "results/plots/chainsaw-table.pdf",
+        "results/plots/treeplots.png",
+        "results/plots/inferred.pdf",
+        "results/plots/genbank-nseqs.pdf",
+        "results/plots/subtree-grid.pdf",
+        "results/plots/nsubtrees.pdf"
 
 ## get-metadata.py: replaced by ingest
 
@@ -219,20 +222,21 @@ rule subtyping: # output too poor
         python scripts/subtyping.py {input} {output} {params.yes}
         """
 
-CUTOFF = False # set to True to use cutoff
+CUTOFF = 0.016 # set to None to skip chainsaw
+# CUTOFF = None
 rule chainsaw:
     """
     Partition tree by cutting on internal branches with length 
     exceeding threshold.
     """
     input:
-        infile="results/tree.midpoint.nwk"
+        infile = "results/tree.midpoint.nwk"
     output:
-        outfile="results/chainsaw_output.csv"
+        outfile = "results/chainsaw_output.csv" if CUTOFF is None else f"results/chainsaw-{CUTOFF}.labels.csv"
     params:
-        cutoff="--cutoff 0.015 " if CUTOFF else "",  # or specify a float value
-        nbin=20,
-        format="summary" # "summary", "labels" or "trees"
+        cutoff = lambda wildcards: "" if CUTOFF is None else f"--cutoff {CUTOFF}",
+        nbin = 20,
+        format="summary"  # "summary", "labels" or "trees"
     shell:
         """
         python scripts/chainsaw.py {input.infile} {output.outfile} \
@@ -270,34 +274,27 @@ rule plot_trees:
     shell:
         "(Rscript scripts/plot-trees.R) >> log.out"
 
-################################
-# !! R scripts below are still in work !!
-################################
-
-
 rule chainsaw_plot:
     input:
         "results/chainsaw-nsubtrees.csv",
-        "results/chainsaw-nsubtrees-na.csv",
-        "results/chainsaw-HA-0.18.labels.csv",
-        "results/chainsaw-NA-0.41.labels.csv",
-        "results/chainsaw-nsubtrees-others.csv"
+        rules.chainsaw.output.outfile,
     output:
-        "chainsaw-ha.pdf"
+        "results/plots/chainsaw.pdf",
+        "results/plots/chainsaw-table.pdf" # chainsaw-table has currently random numbers until fixed
     shell:
         "Rscript scripts/chainsaw-plot.R"
 
 
-rule coldates_plot:
+rule coldates_plot: # Figure S1
     """ 
     Plot collection dates
     """
     input:
-        "gisaid.csv"
+        "data/metadata.tsv"
     output:
-        "gisaid-nseqs.pdf"
+        "results/plots/genbank-nseqs.pdf"
     shell:
-        "Rscript scripts/coldates.R"
+        "(Rscript scripts/coldates.R) >> log.out"
 
 
 rule subtree_grid_plot:
@@ -306,9 +303,10 @@ rule subtree_grid_plot:
     """
     input:
         "results/subtree-grid.csv",
-        "results/HA.mindiv0_08.maxpat1_2.subtypes.csv"
+        "results/mindiv0_01.maxpat1_2.subtypes.csv"
     output:
-        "subtree-grid.pdf"
+        "results/plots/subtree-grid.pdf",
+        "results/plots/nsubtrees.pdf"
     shell:
         "Rscript scripts/subtree-grid.R"
 

@@ -126,67 +126,73 @@ def chainsaw(phy, cutoff):
     return subtrees
 
 
-def mutual_info(subtrees, hema=True):
+def mutual_info(subtrees, hema=True, min_coverage=0.9894):
     """
     Calculate the normalized mutual information of HnNn labels and
     subtrees as different partitions of the data.
-    :param subtrees:  list, BaseTree objects
-    :return:  (float, float), mutual information (normalized)
-    """
-    # entabulate serotype labels per subtree
-    tab = []
-    if hema:
-        pat = re.compile(r"_([A-Z0-9]{1,5})_")  # match Hn ".+_(H[0-9]+)N[0-9]+_.+"
-    else:
-        pat = re.compile(r"_([A-Z0-9]{1,5})_")  # match Nn ".+_H[0-9]+(N[0-9]+)_.+"
 
-    total = 0  # number of tips with any HnNn label
-    stcount = {}  # by subtree
-    serocount = {}  # total HnNn counts
+    :param subtrees: list of BaseTree objects
+    :param hema: whether to match Hn or Nn labels
+    :return: (float, float), mutual information and normalized mutual information
+    """
+    # Pattern for matching EV subgenotype labels
+    pat = re.compile(r"_([A-Z0-9]{1,5})_")
+    total = 0  # number of tips with valid labels
+    total_tips = 0  # total number of tips across all subtrees
+    stcount = {}  # number of labeled tips per subtree
+    serocount = {}  # count of each label across all subtrees
+    tab = []  # list of label counts per subtree
 
     for idx, subtree in enumerate(subtrees):
-        stcount.update({idx: 0})
         tips = [tip.name for tip in subtree.get_terminals()]
-        labels = {}  # HnNn counts in this subtree
+        total_tips += len(tips)
+        stcount[idx] = 0
+        labels = {}
+
         for tip in tips:
             matches = pat.findall(tip)
             if not matches:
-                print(f"[DEBUG] No match for tip: {tip}") 
-            if matches:
-                label = matches[0]
-                if label not in labels:
-                    labels.update({label: 0})
-                labels[label] += 1
-                total += 1
-                stcount[idx] += 1
-                if label not in serocount:
-                    serocount.update({label: 0})
-                serocount[label] += 1
+                # print(f"[DEBUG] No match for tip: {tip}")
+                continue
+            label = matches[0]
+            labels[label] = labels.get(label, 0) + 1
+            stcount[idx] += 1
+            serocount[label] = serocount.get(label, 0) + 1
+            total += 1
+
         tab.append(labels)
 
-    # calculate mutual information
-    minfo = 0
+    # Calculate and report coverage
+    if total_tips == 0:
+        raise ValueError("No tips found in the subtrees.")
+    coverage = total / total_tips
+    # print(f"[INFO] Label coverage: {coverage:.2%} ({total} / {total_tips})")
+
+    if total == 0:
+        raise ValueError("No valid subtype labels found. Cannot compute mutual information.")
+
+    if coverage < min_coverage:
+        raise ValueError(f"Label coverage below minimum threshold ({coverage:.2%} < {min_coverage:.0%}). "
+                         f"Check tip naming or regex pattern.")
+
+    # Compute mutual information
+    minfo = 0.0
     for i, subtree in enumerate(tab):
         pi = stcount[i] / total  # marginal freq of subtree
         for serotype, count in subtree.items():
-            pj =  serocount[serotype] / total  # marginal freq of serotype
-            pij = count / total  # cell-specific joint prob
-            if pij == 0:
-                continue
-            minfo += pij * log(pij / (pi*pj))
+            pj = serocount[serotype] / total # marginal freq of serotype
+            pij = count / total # cell-specific joint prob
+            if pij > 0:
+                minfo += pij * log(pij / (pi * pj))
 
-    # debugging
-    # ipdb.set_trace()
-    # print(f"Empty subtrees: {[i for i, c in stcount.items() if c == 0]}")
+    # Entropy of subtree distribution
+    hu = -1.0 * sum((count / total) * log(count / total) for count in stcount.values() if count > 0)
+    # Entropy of serotype distribution
+    hv = -1.0 * sum((count / total) * log(count / total) for count in serocount.values() if count > 0)
 
+    norm_minfo = 0.0 if (hu + hv) == 0 else 2 * minfo / (hu + hv)
 
-    # normalization
-    hu = -1.0 * sum([count / total * log(count / total) for _, count in stcount.items()])
-    hv = -1.0 * sum([count / total * log(count / total) for _, count in serocount.items()])
-    norm_minfo = 2 * minfo / (hu + hv)
-    
     return minfo, norm_minfo
-
 
 if __name__ == "__main__":
     # command line interface

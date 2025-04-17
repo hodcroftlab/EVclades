@@ -5,7 +5,7 @@ require(xtable)
 
 setwd("results")
 
-# while(run==TRUE) {
+# while(FALSE){
   phy <- read.tree("tree.midpoint.nwk") #"gb-relabeled-ha.ft2-mle.mid.nwk")
   phy <- ladderize(phy)
   eL <- tree.layout(phy)  # takes a few minutes! 
@@ -31,11 +31,9 @@ setwd("results")
   
   # save(hL, nL, file="~/workspace/fluclades/plots/treeplots.RData")
   save(eL, file="./plots/treeplots.RData")
-  run=FALSE
 # }
 
 load('./plots/treeplots.RData')
-run=TRUE
 
 # locate edges - this takes a while, so run once and save results!
 # while(FALSE) {
@@ -64,7 +62,7 @@ run=TRUE
   # })
   # save(h.edges, n.edges, file="./plots/edge-index.RData")
   save(edges, file="./plots/edge-index.RData")
-  run=FALSE
+  save(serotypes, file ="./plots/serotypes.RData")
 # }
 load('./plots/edge-index.RData')
 
