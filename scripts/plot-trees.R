@@ -2,11 +2,18 @@ require(ggfree)
 require(phangorn)
 require(xtable)
 
+args <- commandArgs(trailingOnly = TRUE)
 
-setwd("results")
+if (length(args) < 3) {
+  stop("Usage: Rscript plot-trees.R <tree_file> <output_png> <output_pdf>")
+} 
+
+tree_file <- args[1]
+output_png <- args[2]
+output_pdf <- args[3]
 
 # while(FALSE){
-  phy <- read.tree("tree.midpoint.nwk") #"gb-relabeled-ha.ft2-mle.mid.nwk")
+  phy <- read.tree(tree_file) #"gb-relabeled-ha.ft2-mle.mid.nwk")
   phy <- ladderize(phy)
   eL <- tree.layout(phy)  # takes a few minutes! 
   eL$nodes$sero <- gsub("^.*_([A-Z0-9]{1,5})_.*$", "\\1", eL$nodes$label)
@@ -30,10 +37,10 @@ setwd("results")
   # nL$nodes$sero <- toupper(nL$nodes$sero)
   
   # save(hL, nL, file="~/workspace/fluclades/plots/treeplots.RData")
-  save(eL, file="./plots/treeplots.RData")
+  save(eL, file="results/plots/treeplots.RData")
 # }
 
-load('./plots/treeplots.RData')
+load('results/plots/treeplots.RData')
 
 # locate edges - this takes a while, so run once and save results!
 # while(FALSE) {
@@ -60,11 +67,11 @@ load('./plots/treeplots.RData')
   #   idx <- which(nL$nodes$sero == paste("N", i, sep=""))
   #   find.clade(nL, tips=nL$nodes$label[idx])
   # })
-  # save(h.edges, n.edges, file="./plots/edge-index.RData")
-  save(edges, file="./plots/edge-index.RData")
-  save(serotypes, file ="./plots/serotypes.RData")
+  # save(h.edges, n.edges, file="results/plots/edge-index.RData")
+  save(edges, file="results/plots/edge-index.RData")
+  save(serotypes, file ="results/plots/serotypes.RData")
 # }
-load('./plots/edge-index.RData')
+load('results/plots/edge-index.RData')
 
 
 # plot functions
@@ -88,7 +95,7 @@ colour.clade <- function(obj, idx, col, skip=5, offset=0.03, cex=1, lwd=2) {
 
 # prepare plot device
 res <- 600
-png("./plots/treeplots.png", width=5*res, height=5*res, res=res) #width=10*res for HA
+png(output_png, width=5*res, height=5*res, res=res) #width=10*res for HA
 # par(mfrow=c(1,2))
 par(mfrow=c(1,1), mar=c(5,5,1,1), cex=0.8)
 
@@ -202,7 +209,7 @@ comp$unknown <- as.integer(tab)[match(comp$subtype, names(tab))]
 # n.comp$unknown <- as.integer(tab)[match(n.comp$subtype, names(tab))]
 
 
-pdf("./plots/inferred.pdf", width=8, height=4)
+pdf(output_pdf, width=8, height=4)
 par(mfrow=c(1,2), mar=c(5,5,1,1), cex=1)
 plot(unknown~known, data=comp, las=1, cex.axis=0.8, 
      type='n', xlab="Number of annotated sequences",

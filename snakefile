@@ -16,6 +16,9 @@ GFF_PATH = "data/genome_annotation.gff3" # annotation gff3 for EV-D68
 REFERENCE_PATH = "data/reference.fasta" # EV-D68 reference sequence
 ROOTING = "mid_point" # mid-point rooting of tree (using augur refine instead of midpoint.R)
 INCL_PARAMS = False # include mindiv and maxpat in subtyping script -> if False, None is taken
+CUTOFF = 0.008 # set to None to get a list of different cutoff values
+FORMAT = "labels" # "summary", "labels" or "trees"
+MAX_DATE = "2017-01-01"
 
 ## Run all rules in snakemake
 rule all:
@@ -28,6 +31,8 @@ rule all:
         "results/plots/subtree-grid.pdf",
         "results/plots/nsubtrees.pdf"
 
+
+###### Alignment & Tree building ######
 ## get-metadata.py: replaced by ingest
 
 rule index_sequences:
@@ -62,6 +67,7 @@ rule filter:
     params: 
         min_length="" if MIN_LENGTH == "" else "--min-length " + MIN_LENGTH,
         strain_id_field = ID_FIELD,
+        max_date = "--max-date " + MAX_DATE,
     shell:
         """
         augur filter \
@@ -71,13 +77,15 @@ rule filter:
             --metadata-id-columns {params.strain_id_field} \
             --exclude {input.exclude} \
             {params.min_length} \
+            {params.max_date} \
             --output {output.filtered_sequences} \
             --output-metadata {output.filtered_metadata}
         """
 
 rule relabel_fasta:
     """ 
-    Relabel fasta sequences with metadata. Adding subgenotypes to fasta headers.
+    Relabel fasta sequences with metadata. 
+    Adding RIVM subgenotypes to fasta headers to mimic flu strain names.
     """
     input:
         fasta = "results/filtered_sequences_raw.fasta",
@@ -100,6 +108,7 @@ rule relabel_fasta:
 #     shell:
 #         "python scripts/filter-prot.py {input} {output}"
 
+# run alignment & translation before compressing?
 
 rule compress_sequences:
     """ 
@@ -202,7 +211,7 @@ rule refine:
             --output-tree {output.tree}
         """
 
-
+###### Subtyping & Chainsaw ######
 rule subtyping: # output too poor
     """
     node-wise clustering of phylogenetic trees
@@ -220,27 +229,6 @@ rule subtyping: # output too poor
     shell:
         """
         python scripts/subtyping.py {input} {output} {params.yes}
-        """
-
-CUTOFF = 0.016 # set to None to skip chainsaw
-# CUTOFF = None
-rule chainsaw:
-    """
-    Partition tree by cutting on internal branches with length 
-    exceeding threshold.
-    """
-    input:
-        infile = "results/tree.midpoint.nwk"
-    output:
-        outfile = "results/chainsaw_output.csv" if CUTOFF is None else f"results/chainsaw-{CUTOFF}.labels.csv"
-    params:
-        cutoff = lambda wildcards: "" if CUTOFF is None else f"--cutoff {CUTOFF}",
-        nbin = 20,
-        format="summary"  # "summary", "labels" or "trees"
-    shell:
-        """
-        python scripts/chainsaw.py {input.infile} {output.outfile} \
-        {params.cutoff} --nbin {params.nbin} --format {params.format}
         """
 
 rule auto_chainsaw:
@@ -262,27 +250,59 @@ rule auto_chainsaw:
         {output}
         """
 
+rule chainsaw:
+    """
+    Partition tree by cutting on internal branches with length 
+    exceeding threshold.
+    """
+    input:
+        infile = "results/tree.midpoint.nwk"
+    output:
+        outfile = "results/chainsaw.subtrees.nwk" if FORMAT == "trees" else ("results/chainsaw_output.csv" if CUTOFF is None else f"results/chainsaw-{CUTOFF}.{FORMAT}.csv")  
+    params:
+        cutoff = lambda wildcards: "" if CUTOFF is None else f"--cutoff {CUTOFF}",
+        nbin = 20
+    shell:
+        """
+        (python scripts/chainsaw.py {input.infile} {output.outfile} \
+        {params.cutoff} --nbin {params.nbin} --format {FORMAT}) > log.out 
+        """
+
+##### Plotting #####
 rule plot_trees:
     """ 
     Create tree plots
     """
     input:
-        tree = "results/tree.midpoint.nwk" 
+        tree = "results/tree.midpoint.nwk",
+        # tree = "results/chainsaw.subtrees.nwk"
     output:
-        "results/plots/treeplots.png",
-        "results/plots/inferred.pdf"
+        plot_png = "results/plots/treeplots.png",
+        plot_pdf = "results/plots/inferred.pdf"
     shell:
-        "(Rscript scripts/plot-trees.R) >> log.out"
+        """
+        Rscript scripts/plot-trees.R {input.tree} {output.plot_png} {output.plot_pdf} >> log.out
+        """
+
+
 
 rule chainsaw_plot:
     input:
-        "results/chainsaw-nsubtrees.csv",
-        rules.chainsaw.output.outfile,
+        nsubtrees = "results/chainsaw-nsubtrees.csv",
+        label = f"results/chainsaw-{CUTOFF}.{FORMAT}.csv",
+        # label = "results/chainsaw-0.008.labels.csv",
+    params:
+        keep_NA = "True", # "True" or "False"
     output:
-        "results/plots/chainsaw.pdf",
-        "results/plots/chainsaw-table.pdf" # chainsaw-table has currently random numbers until fixed
+        out_pdf = "results/plots/chainsaw.pdf",
+        out_table = "results/plots/chainsaw-table.pdf" # chainsaw-table has currently random numbers until fixed
     shell:
-        "Rscript scripts/chainsaw-plot.R"
+        """
+        Rscript scripts/chainsaw-plot.R {input.nsubtrees} {input.label} \
+        {output.out_pdf} {output.out_table} \
+        {params.keep_NA} \
+        >> log.out
+        """
 
 
 rule coldates_plot: # Figure S1
@@ -294,7 +314,7 @@ rule coldates_plot: # Figure S1
     output:
         "results/plots/genbank-nseqs.pdf"
     shell:
-        "(Rscript scripts/coldates.R) >> log.out"
+        "Rscript scripts/coldates.R {input} {output} >> log.out"
 
 
 rule subtree_grid_plot:
@@ -302,12 +322,12 @@ rule subtree_grid_plot:
     Plot subtree grid
     """
     input:
-        "results/subtree-grid.csv",
-        "results/mindiv0_01.maxpat1_2.subtypes.csv"
+        grid = "results/subtree-grid.csv",
+        params_set = "results/mindiv0_01.maxpat1_2.subtypes.csv"
     output:
-        "results/plots/subtree-grid.pdf",
-        "results/plots/nsubtrees.pdf"
+        out_pdf = "results/plots/subtree-grid.pdf",
+        nsubtrees = "results/plots/nsubtrees.pdf"
     shell:
-        "Rscript scripts/subtree-grid.R"
+        "Rscript scripts/subtree-grid.R {input.grid} {input.params_set} {output.out_pdf} {output.nsubtrees} >> log.out"
 
 

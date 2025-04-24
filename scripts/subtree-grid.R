@@ -1,11 +1,17 @@
-# setwd("~/workspace/fluclades")
-grid <- read.csv("results/subtree-grid.csv")
+args <- commandArgs(trailingOnly = TRUE)
+
+grid <- args[1]
+params_set <- args[2]
+out_pdf <- args[3]
+nsubtrees <- args[4]
+
+grid <- read.csv(grid)
 load("results/plots/serotypes.RData")
 lenS = length(serotypes)
 grid$st.diff <- log(grid$nsubtrees/lenS)
 
 #plot(grid$minlen, grid$maxlen, cex=grid$mean.n.types)
-pdf("results/plots/subtree-grid.pdf", width=10, height=10)
+pdf(out_pdf, width=10, height=10)
 par(mar=c(5,5,2,1), mfrow=c(2,2), cex=1)
 
 plot(grid$minlen, grid$maxlen, pch=21,
@@ -29,7 +35,7 @@ points(grid$minlen[grid$nlabels<1], grid$maxlen[grid$nlabels<1],
 title(main="Number of dropped labels", adj=0, font.main=1)
 text(x=-0.02, y=2.2, label="C", cex=2, xpd=NA)
 
-res <- read.csv("results/mindiv0_01.maxpat1_2.subtypes.csv")
+res <- read.csv(params_set)
 res <- res[res$serotype!='H192329',]
 #res <- read.csv("results/HA.mindiv0.maxpat1_1.subtypes.csv")
 #res <- read.csv("results/HA.mindiv0_08.maxpat1.subtypes.csv")
@@ -68,7 +74,7 @@ dev.off()
 
 # if(FALSE) {
   require(ggfree)
-  pdf("results/plots/nsubtrees.pdf", width=5, height=5)
+  pdf(nsubtrees, width=5, height=5)
   par(mar=c(5,5,1,1))
   ridgeplot(split(log10(grid$nsubtrees), grid$minlen), fill=gg.rainbow(10, alpha=0.5),
             ylab="Minimum divergence", xlab="Log(number of subtrees)", xaxt='n',

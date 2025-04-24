@@ -1,7 +1,9 @@
+# data & results
 data/*
 results/*
 flu-results*
 RIVM
+*.pdf
 
 .RData
 .Rhistory
@@ -18,7 +20,4 @@ log.out
 R_packages*
 
 # unused scripts from fluclades
-midpoint.R
-get-metadata.py
-filter-prot.py
-concat-genes.py
+scripts/unused

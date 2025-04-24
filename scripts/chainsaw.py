@@ -10,7 +10,6 @@ import bisect
 import sys
 import re
 from math import log
-import ipdb
 
 
 def get_parents(phy):
@@ -19,7 +18,6 @@ def get_parents(phy):
     for parent in phy.get_nonterminals():
         for child in parent.clades:
             parents.update({child: parent})
-    # ipdb.set_trace()
     return parents
 
 
@@ -82,8 +80,7 @@ def cuttree(phy, clade):
     
     subtree2.root.branch_length = 0
     unroot(subtree2)
-    # ipdb.set_trace()
-    return subtree1, subtree2 # two trees, one with small clade and one with the rest
+    return subtree1, subtree2
 
 
 def longest(phy):
@@ -126,73 +123,61 @@ def chainsaw(phy, cutoff):
     return subtrees
 
 
-def mutual_info(subtrees, hema=True, min_coverage=0.9894):
+def mutual_info(subtrees, hema=True):
     """
     Calculate the normalized mutual information of HnNn labels and
     subtrees as different partitions of the data.
-
-    :param subtrees: list of BaseTree objects
-    :param hema: whether to match Hn or Nn labels
-    :return: (float, float), mutual information and normalized mutual information
+    :param subtrees:  list, BaseTree objects
+    :return:  (float, float), mutual information (normalized)
     """
-    # Pattern for matching EV subgenotype labels
-    pat = re.compile(r"_([A-Z0-9]{1,5})_")
-    total = 0  # number of tips with valid labels
-    total_tips = 0  # total number of tips across all subtrees
-    stcount = {}  # number of labeled tips per subtree
-    serocount = {}  # count of each label across all subtrees
-    tab = []  # list of label counts per subtree
+    # entabulate serotype labels per subtree
+    tab = []
+    if hema:
+            pat = re.compile(r"_((?:[A-Z]\d+|[A-Z]{1,3}))_")  # match A1, A2, B1, B2, B3, US00, ... EV-D68 subgenotypes
+    else:
+        pat = re.compile(".+_H[0-9]+(N[0-9]+)_.+")  # match Nn
+
+    total = 0  # number of tips with any HnNn label
+    stcount = {}  # by subtree
+    serocount = {}  # total HnNn counts
 
     for idx, subtree in enumerate(subtrees):
+        stcount.update({idx: 0})
         tips = [tip.name for tip in subtree.get_terminals()]
-        total_tips += len(tips)
-        stcount[idx] = 0
-        labels = {}
-
+        labels = {}  # HnNn counts in this subtree
         for tip in tips:
             matches = pat.findall(tip)
-            if not matches:
-                # print(f"[DEBUG] No match for tip: {tip}")
-                continue
-            label = matches[0]
-            labels[label] = labels.get(label, 0) + 1
-            stcount[idx] += 1
-            serocount[label] = serocount.get(label, 0) + 1
-            total += 1
-
+            if matches:
+                label = matches[0]
+                if label not in labels:
+                    labels.update({label: 0})
+                labels[label] += 1
+                total += 1
+                stcount[idx] += 1
+                if label not in serocount:
+                    serocount.update({label: 0})
+                serocount[label] += 1
         tab.append(labels)
 
-    # Calculate and report coverage
-    if total_tips == 0:
-        raise ValueError("No tips found in the subtrees.")
-    coverage = total / total_tips
-    # print(f"[INFO] Label coverage: {coverage:.2%} ({total} / {total_tips})")
-
-    if total == 0:
-        raise ValueError("No valid subtype labels found. Cannot compute mutual information.")
-
-    if coverage < min_coverage:
-        raise ValueError(f"Label coverage below minimum threshold ({coverage:.2%} < {min_coverage:.0%}). "
-                         f"Check tip naming or regex pattern.")
-
-    # Compute mutual information
-    minfo = 0.0
+    # calculate mutual information
+    minfo = 0
     for i, subtree in enumerate(tab):
         pi = stcount[i] / total  # marginal freq of subtree
         for serotype, count in subtree.items():
-            pj = serocount[serotype] / total # marginal freq of serotype
-            pij = count / total # cell-specific joint prob
-            if pij > 0:
-                minfo += pij * log(pij / (pi * pj))
+            pj =  serocount[serotype] / total  # marginal freq of serotype
+            pij = count / total  # cell-specific joint prob
+            if pij == 0:
+                continue
+            minfo += pij * log(pij / (pi*pj))
 
-    # Entropy of subtree distribution
-    hu = -1.0 * sum((count / total) * log(count / total) for count in stcount.values() if count > 0)
-    # Entropy of serotype distribution
-    hv = -1.0 * sum((count / total) * log(count / total) for count in serocount.values() if count > 0)
-
-    norm_minfo = 0.0 if (hu + hv) == 0 else 2 * minfo / (hu + hv)
-
+    # normalization
+    # hu = -1.0 * sum([count / total * log(count / total) for _, count in stcount.items()])
+    # hu calculation failed in auto-chainsaw -> added a count > 0 check
+    hu = -1.0 * sum([(count / total) * log(count / total) for _, count in stcount.items() if count > 0])
+    hv = -1.0 * sum([count / total * log(count / total) for _, count in serocount.items()])
+    norm_minfo = 2 * minfo / (hu + hv)
     return minfo, norm_minfo
+
 
 if __name__ == "__main__":
     # command line interface
@@ -253,4 +238,3 @@ if __name__ == "__main__":
 
     if args.outfile is not sys.stdout:
         args.outfile.close()
-

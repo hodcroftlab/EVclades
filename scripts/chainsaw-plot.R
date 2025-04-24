@@ -1,16 +1,26 @@
 require(xtable)
-## working dictory: 
-# setwd("~/workspace/fluclades/")
+
+args <- commandArgs(trailingOnly = TRUE)
+
+print("Command-line arguments:")
+print(args)
+
+nsubtrees <- args[1]
+label <- args[2]
+out_pdf <- args[3]
+out_table <- args[4]
+keep_na <- args[5]
+
 rescale <- function(x, from, to) {
   # map vector `x` to range of `to`, given it comes from range of `from`
   diff(range(to)) * (x-min(from)) / diff(range(from)) + min(to)
 }
 
-chainsaw <- read.csv("results/chainsaw-nsubtrees.csv")
+chainsaw <- read.csv(nsubtrees)
 chainsaw <- chainsaw[chainsaw$cutoff > 0.007,]  # drop cutoffs that yield too many subtrees (37 trees)
 
 # manual runs of chainsaw.py
-pdf("results/plots/chainsaw.pdf", width=5, height=4)
+pdf(out_pdf, width=5, height=4)
 {par(mar=c(5,5,1,5))
 
 plot(chainsaw$cutoff, chainsaw$nsubtrees, type='n', 
@@ -46,12 +56,12 @@ lines(chainsaw$cutoff, chainsaw$nsubtrees, type='s', col='royalblue')
 #abline(h=18, col=rgb(0,0,0,0.2))
 
 # there are 12 serotypes in EV-D68
-load('./results/plots/serotypes.RData')
+load('results/plots/serotypes.RData')
 
 segments(x0=0, x1=0.017, y0=length(serotypes), col='royalblue', lty=2)
 text(x=0.0175, y=length(serotypes), label=paste0(length(serotypes)), col="royalblue", cex=0.5)
 }
-print("saved to results/plots/chainsaw.pdf")
+print(paste("saved to", out_pdf))
 dev.off()
 
 
@@ -103,30 +113,36 @@ dev.off()
 
 # examine distribution of serotype labels among subtrees
 # if (doFull) {
-  labels <- read.csv("results/chainsaw-0.012.labels.csv") # define a variable to get the different cutoffs
-  pat <- "^.*_([A-Z0-9]{1,5})_.*$" # full 
+labels <- read.csv(label) # define a variable to get the different cutoffs
+pat <- "^.*_([A-Z0-9]{1,5})_.*$" # full 
 # } else {
 #   labels <- read.csv("flu-results/chainsaw-NA-0.41.labels.csv")
 #   pat <- ".+_H[0-9]+(N[0-9]+)_.+"  # NA  
 # }
 
 labels$serotype <- gsub(pat, "\\1", labels$tip.label)
-labels$serotype[!grepl(pat, labels$tip.label)] <- NA
-##TODO: here the number of sequences are not put into the table
+if (keep_na=="False") {
+  labels$serotype[!grepl(pat, labels$tip.label)] <- NA
+  labels <- na.omit(labels) # remove NAs
+  
+} else {
+  labels$serotype[!grepl(pat, labels$tip.label)] <- "unlabeled"
+}
 
 tab <- table(labels$subtree, labels$serotype)
 #xtable(tab)  # used to embed table into LaTeX document
 
-tab <- matrix(sample(0:50, nrow(tab) * ncol(tab), replace = TRUE),
-              nrow = nrow(tab),
-              ncol = ncol(tab),
-              dimnames = dimnames(tab))
+# tab <- matrix(sample(0:50, nrow(tab) * ncol(tab), replace = TRUE),
+#               nrow = nrow(tab),
+#               ncol = ncol(tab),
+#               dimnames = dimnames(tab))
 
 
 # generate a plot
 x <- tab / apply(tab, 1, sum)
 # if (doFull) {
-  xval <- as.integer(gsub("^[A-Z]+", "\\1", colnames(x)))  # not sure if it would be better to keep original names
+xval <- 1:length(colnames(x))  # not sure if it would be better to keep original names
+translation <- rbind(1:length(colnames(x)), colnames(x))
 # } else {
 #   xval <- as.integer(gsub("N([0-9]+)", "\\1", colnames(x))) 
 # }
@@ -136,12 +152,12 @@ jo <- order(xval)  # column index
 
 #hc <- hclust(dist(tab))
 # if (doFull) {
-  pdf("results/plots/chainsaw-table.pdf", width=4.5, height=4.5)  
+  pdf(out_table, width=4.5, height=4.5)  
 # } else {
 #   pdf("~/papers/fluclades/chainsaw-NA-table.pdf", width=4.5, height=4.5) 
 # }
 {
-  par(mar=c(5,5,1,2))
+par(mar=c(5,5,1,2))
 
 shim <- 0.4 #0.65 or 0.4
 plot(NA, xlim=c(shim, ncol(x)-shim), ylim=c(shim, nrow(x)-shim), 
@@ -172,7 +188,7 @@ axis(side=2, at=1:nrow(x)-0.5, label=paste("s", io-1, sep=""),
 axis(side=4, at=1:nrow(x)-0.5, label=apply(tab[io,], 1, sum),
      cex.axis=0.6, las=2, lwd=0, line=-0.9)
 }
-print("results/plots/chainsaw-table.pdf")
+print(out_table)
 dev.off()
 
 

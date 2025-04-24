@@ -1,9 +1,13 @@
-setwd("~/workspace/fluclades")
 library("dplyr")
+
+args <- commandArgs(trailingOnly = TRUE)
+
+input <- args[1]
+output <- args[2]
 
 # these metadata cannot be released to public domain
 # gisaid <- read.csv("gisaid.csv")
-genbank <- read.csv("data/metadata.tsv", sep="\t")
+genbank <- read.csv(input, sep="\t")
 genbank$year <- substr(genbank$date, 1, 4)
 # number of sequences per year
 genbank <- genbank %>% group_by(year) %>% 
@@ -23,7 +27,7 @@ genbank <- genbank %>% group_by(year) %>%
 #idx <- match(genbank$year, names(flua))
 #genbank$ndetect <- flua[idx]
 
-pdf("results/plots/genbank-nseqs.pdf", width=4.5, height=4.5)
+pdf(output, width=4.5, height=4.5)
 
 par(mar=c(5,5,1,1))
 barplot(genbank$nseq[order(genbank$year)]/100, space=0, 

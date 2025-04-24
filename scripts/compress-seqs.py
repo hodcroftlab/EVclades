@@ -16,12 +16,24 @@ args = parser.parse_args()
 records = SeqIO.parse(args.infile, 'fasta')
 
 unique = {}
+## for AA
+# for i, record in enumerate(records):
+#     seq = str(record.seq)
+#     if seq.count('X') / len(seq) > 0.1: # discard if more than 10% of sequence is ambiguous
+#         print(f"Discarding sequence {record.name} with {seq.count('X')} Xs")
+#         continue
+#     seq = seq.replace('X', '')
+#     if seq not in unique:
+#         unique.update({seq: []})
+#     unique[seq].append(record.description)
+
+## for nucleotides
 for i, record in enumerate(records):
     seq = str(record.seq)
-    if seq.count('X') / len(seq) > 0.1: # discard if more than 10% of sequence is ambiguous
-        print(f"Discarding sequence {record.name} with {seq.count('X')} Xs")
+    if seq.count('N') / len(seq) > 0.1: # discard if more than 10% of sequence is ambiguous
+        print(f"Discarding sequence {record.name} with {seq.count('N')} Ns")
         continue
-    seq = seq.replace('X', '')
+    seq = seq.replace('N', '')
     if seq not in unique:
         unique.update({seq: []})
     unique[seq].append(record.description)
