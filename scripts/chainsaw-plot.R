@@ -2,9 +2,6 @@ require(xtable)
 
 args <- commandArgs(trailingOnly = TRUE)
 
-print("Command-line arguments:")
-print(args)
-
 nsubtrees <- args[1]
 label <- args[2]
 out_pdf <- args[3]
@@ -126,7 +123,7 @@ if (keep_na=="False") {
   labels <- na.omit(labels) # remove NAs
   
 } else {
-  labels$serotype[!grepl(pat, labels$tip.label)] <- "unlabeled"
+  labels$serotype[!grepl(pat, labels$tip.label)] <- "UNK"
 }
 
 tab <- table(labels$subtree, labels$serotype)

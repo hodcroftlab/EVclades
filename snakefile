@@ -15,7 +15,6 @@ EXCLUDE = "data/exclude.txt"
 GFF_PATH = "data/genome_annotation.gff3" # annotation gff3 for EV-D68
 REFERENCE_PATH = "data/reference.fasta" # EV-D68 reference sequence
 ROOTING = "mid_point" # mid-point rooting of tree (using augur refine instead of midpoint.R)
-INCL_PARAMS = False # include mindiv and maxpat in subtyping script -> if False, None is taken
 CUTOFF = 0.008 # set to None to get a list of different cutoff values
 FORMAT = "labels" # "summary", "labels" or "trees"
 MAX_DATE = "2017-01-01"
@@ -212,23 +211,24 @@ rule refine:
         """
 
 ###### Subtyping & Chainsaw ######
-rule subtyping: # output too poor
-    """
-    node-wise clustering of phylogenetic trees
-
-    Calculate summary statistics for internal nodes of the tree, and 
-    select subtrees rooted at those nodes on the basis of one or more
-    criteria defined on these statistics.
-    """
+rule subtyping_params:
     input:
         "results/tree.midpoint.nwk"
     output:
-        "results/mindiv0_01.maxpat1_2.subtypes.csv" if INCL_PARAMS else "results/subtree-grid.csv"
-    params:
-        yes = "--mindiv 0.01 --maxpat 1.2" if INCL_PARAMS else "" # tip-ot-tip distance cutoff = 1.2
+        "results/mindiv0_01.maxpat1_2.subtypes.csv"
     shell:
         """
-        python scripts/subtyping.py {input} {output} {params.yes}
+        python scripts/subtyping.py {input} {output} --mindiv 0.01 --maxpat 1.2
+        """
+
+rule subtyping_grid:
+    input:
+        "results/tree.midpoint.nwk"
+    output:
+        "results/subtree-grid.csv"
+    shell:
+        """
+        python scripts/subtyping.py {input} {output}
         """
 
 rule auto_chainsaw:
@@ -331,3 +331,10 @@ rule subtree_grid_plot:
         "Rscript scripts/subtree-grid.R {input.grid} {input.params_set} {output.out_pdf} {output.nsubtrees} >> log.out"
 
 
+rule clean:
+    shell:
+        """
+        find results/plots/ -mindepth 1 ! -type d -delete
+        find results/translations/ -mindepth 1 ! -type d -delete
+        find results/ -mindepth 1 ! -type d -delete
+        """
