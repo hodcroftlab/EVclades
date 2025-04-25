@@ -1,6 +1,8 @@
-require(ggfree)
-require(phangorn)
-require(xtable)
+suppressPackageStartupMessages({
+  require(ggfree)
+  require(phangorn)
+  require(xtable)
+})
 
 args <- commandArgs(trailingOnly = TRUE)
 
@@ -107,7 +109,6 @@ add.scalebar(eL,
              cex = 0.7) 
 pal <- gg.rainbow(length(serotypes))
 for (i in 1:length(serotypes)) {
-  print(i)
   skip <- ifelse(i %in% c(1,3), 20, 2)
   colour.clade(eL, edges[[i]], col=pal[i], lwd=1, skip=skip, cex=0.8)
 }
@@ -119,7 +120,7 @@ for (i in 1:length(serotypes)) {
 #   skip <- ifelse(i %in% c(1, 4, 5, 8), 20, 2)
 #   colour.clade(nL, n.edges[[i]], col=pal[i], lwd=1, skip=skip, cex=0.8)
 # }
-dev.off()
+invisible(dev.off())
 
 # get.tips in ggfree has an error - overwrite with this function
 get.tips <- function(parent, obj, res = c()) {
@@ -223,4 +224,4 @@ abline(lm(unknown~known, data=comp[idx,]), lty=2, untf=T)
 #      ylab="Number of inferred sequences", bty='n')
 # text(n.comp$known, n.comp$unknown, n.comp$subtype, cex=0.6)
 # abline(lm(unknown~known, data=n.comp[-c(1,4),]), lty=2, untf=T)
-dev.off()
+invisible(dev.off())

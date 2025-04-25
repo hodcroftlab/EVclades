@@ -38,7 +38,7 @@ years <- sort(unique(genbank$year))
 axis(side=1, at=p+0.5, labels=years[p+1], cex.axis=0.8)
 title(xlab="Year of sample collection")
 
-dev.off()
+invisible(dev.off())
 
 # evidence of exponential trend
 fit <- lm(log(nseq)~year, data=genbank)

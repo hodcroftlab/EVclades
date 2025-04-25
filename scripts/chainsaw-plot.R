@@ -1,12 +1,14 @@
-require(xtable)
+suppressPackageStartupMessages({require(xtable)})
 
 args <- commandArgs(trailingOnly = TRUE)
 
-nsubtrees <- args[1]
-label <- args[2]
-out_pdf <- args[3]
-out_table <- args[4]
-keep_na <- args[5]
+nsubtrees <- args[1] # nsubtrees <- "results/chainsaw-nsubtrees.csv"
+label <- args[2] # label <- "results/chainsaw-0.008.labels.csv"
+out_pdf <- args[3] # out_pdf <- "results/plots/chainsaw.pdf"
+out_table <- args[4] # out_table <- "results/plots/chainsaw-table.pdf"
+keep_na <- args[5] # keep_na <- "False"
+cutoff_tree <- as.numeric(args[6]) # cutoff_tree <- 0.008
+# drop cutoffs that yield too many subtrees (37 trees)
 
 rescale <- function(x, from, to) {
   # map vector `x` to range of `to`, given it comes from range of `from`
@@ -14,7 +16,7 @@ rescale <- function(x, from, to) {
 }
 
 chainsaw <- read.csv(nsubtrees)
-chainsaw <- chainsaw[chainsaw$cutoff > 0.007,]  # drop cutoffs that yield too many subtrees (37 trees)
+chainsaw <- chainsaw[chainsaw$cutoff >= cutoff_tree,]  # drop cutoffs that yield too many subtrees (37 trees)
 
 # manual runs of chainsaw.py
 pdf(out_pdf, width=5, height=4)
@@ -28,7 +30,7 @@ mtext(side=2, text="Number of subtrees", line=3, col='royalblue3')
 
 # rescale 
 y <- rescale(chainsaw$normalized, chainsaw$normalized, chainsaw$nsubtrees)
-#polygon(c(min(chainsaw$cutoff), chainsaw$cutoff, max(chainsaw$cutoff)), 
+# polygon(c(min(chainsaw$cutoff), chainsaw$cutoff, max(chainsaw$cutoff)),
 #        c(0, y, 0), col=rgb(0.9,0,0,0.2), border=NA)
 points(chainsaw$cutoff, y, col='firebrick3', pch=19, cex=0.33)
 segments(x0=chainsaw$cutoff[which.max(y)], x1=max(chainsaw$cutoff)*1.1,
@@ -48,18 +50,19 @@ text(x=u[2]+0.06, y=mean(u[3:4]),
      srt=-90, xpd=NA)
 
 lines(chainsaw$cutoff, chainsaw$nsubtrees, type='s', col='royalblue')
-#points(chainsaw$cutoff, chainsaw$nsubtrees, pch=19, cex=0.33, 
+# points(chainsaw$cutoff, chainsaw$nsubtrees, pch=19, cex=0.33,
 #       col='royalblue')
-#abline(h=18, col=rgb(0,0,0,0.2))
+#abline(h=length(serotypes), col=rgb(0,0,0,0.2))
 
 # there are 12 serotypes in EV-D68
 load('results/plots/serotypes.RData')
 
-segments(x0=0, x1=0.017, y0=length(serotypes), col='royalblue', lty=2)
-text(x=0.0175, y=length(serotypes), label=paste0(length(serotypes)), col="royalblue", cex=0.5)
+xmax = chainsaw$cutoff[which(chainsaw$nsubtrees==length(serotypes))]
+segments(x0=0, x1=xmax, y0=length(serotypes), col='royalblue', lty=2)
+text(x=xmax*1.17, y=length(serotypes), label=paste0(length(serotypes)), col="royalblue", cex=0.5)
 }
-print(paste("saved to", out_pdf))
-dev.off()
+# print(paste("saved to", out_pdf))
+invisible(dev.off())
 
 
 ######  NA  ######
@@ -102,7 +105,7 @@ dev.off()
 # #points(chainsaw$cutoff, chainsaw$nsubtrees, pch=19, cex=0.5, col='royalblue')
 # 
 # #abline(h=11, lty=2)
-# dev.off()
+# invisible(dev.off())
 
 
 ################# Generate table plots #################
@@ -123,7 +126,7 @@ if (keep_na=="False") {
   labels <- na.omit(labels) # remove NAs
   
 } else {
-  labels$serotype[!grepl(pat, labels$tip.label)] <- "UNK"
+  labels$serotype[!grepl(pat, labels$tip.label)] <- "unknown"
 }
 
 tab <- table(labels$subtree, labels$serotype)
@@ -159,7 +162,7 @@ par(mar=c(5,5,1,2))
 shim <- 0.4 #0.65 or 0.4
 plot(NA, xlim=c(shim, ncol(x)-shim), ylim=c(shim, nrow(x)-shim), 
      xaxt='n', yaxt='n',
-     xlab="Serotype labels", ylab="Subtree", bty='n')
+     xlab="RIVM labels", ylab="Subtree", bty='n')
 for (i in 1:nrow(x)) {
   for (j in 1:ncol(x)) {
     xx <- 1-x[io[i], jo[j]]
@@ -184,9 +187,20 @@ axis(side=2, at=1:nrow(x)-0.5, label=paste("s", io-1, sep=""),
      las=2, cex.axis=0.8)
 axis(side=4, at=1:nrow(x)-0.5, label=apply(tab[io,], 1, sum),
      cex.axis=0.6, las=2, lwd=0, line=-0.9)
+
+# Get the bottom-left of the full figure region in user coordinates
+x_pos <- grconvertX(0.01, from = "nfc", to = "user")
+y_pos <- grconvertY(0.01, from = "nfc", to = "user")
+
+# Add your label
+text(x = x_pos, y = y_pos,
+     labels = paste("Cutoff:", cutoff_tree),
+     adj = c(0, 0), xpd = NA, cex = 0.8, col = "grey50")
+
+
 }
-print(out_table)
-dev.off()
+# print(out_table)
+invisible(dev.off())
 
 
 
@@ -219,6 +233,6 @@ dev.off()
 #   points(marks[[g]][2], marks[[g]][1]+0.7, pch=25, bg='black', cex=0.9)
 #   i <- i+1
 # }
-# dev.off()
+# invisible(dev.off())
 
 

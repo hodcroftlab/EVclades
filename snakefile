@@ -15,7 +15,7 @@ EXCLUDE = "data/exclude.txt"
 GFF_PATH = "data/genome_annotation.gff3" # annotation gff3 for EV-D68
 REFERENCE_PATH = "data/reference.fasta" # EV-D68 reference sequence
 ROOTING = "mid_point" # mid-point rooting of tree (using augur refine instead of midpoint.R)
-CUTOFF = 0.008 # set to None to get a list of different cutoff values
+CUTOFF = 0.007 # set to None to get a list of different cutoff values; vary between 0.005 and 0.011
 FORMAT = "labels" # "summary", "labels" or "trees"
 MAX_DATE = "2017-01-01"
 
@@ -23,12 +23,11 @@ MAX_DATE = "2017-01-01"
 rule all:
     input:
         "results/plots/chainsaw.pdf",
-        "results/plots/chainsaw-table.pdf",
+        f"results/plots/chainsaw-table_{CUTOFF}.pdf",
         "results/plots/treeplots.png",
-        "results/plots/inferred.pdf",
         "results/plots/genbank-nseqs.pdf",
-        "results/plots/subtree-grid.pdf",
-        "results/plots/nsubtrees.pdf"
+        # "results/plots/subtree-grid.pdf",
+        # "results/plots/nsubtrees.pdf"
 
 
 ###### Alignment & Tree building ######
@@ -69,6 +68,7 @@ rule filter:
         max_date = "--max-date " + MAX_DATE,
     shell:
         """
+        (echo -e filter:
         augur filter \
             --sequences {input.sequences} \
             --sequence-index {input.sequence_index} \
@@ -78,7 +78,7 @@ rule filter:
             {params.min_length} \
             {params.max_date} \
             --output {output.filtered_sequences} \
-            --output-metadata {output.filtered_metadata}
+            --output-metadata {output.filtered_metadata}) > log.out 2>&1
         """
 
 rule relabel_fasta:
@@ -93,7 +93,11 @@ rule relabel_fasta:
     output:
         "results/relabeled_seqs.fasta"
     shell:
-        "python3 scripts/relabel-fasta.py {input.fasta} {input.metadata} {input.subgenotype} {output}"
+        """
+        echo -e "\nrelabel_fasta:" >> log.out
+        python3 scripts/relabel-fasta.py {input.fasta} {input.metadata} \
+        {input.subgenotype} {output} >> log.out 2>&1
+        """
 
 # added subtype in relabel_fasta - using whole genome only (for now)
 # rule filter_protein:
@@ -119,7 +123,10 @@ rule compress_sequences:
         fasta = "results/compressed_seqs.fasta",
         csv = "results/duplicates.csv"
     shell:
-        "python scripts/compress-seqs.py {input} {output.fasta} {output.csv}"
+        """
+        echo -e "\ncompress_sequences:" >> log.out
+        python scripts/compress-seqs.py {input} {output.fasta} {output.csv} >> log.out 2>&1
+        """
 
 
 ## concat-genes.py: skipped; specific to Influenza?
@@ -168,7 +175,7 @@ rule align:
         --include-reference false \
         --output-tsv {output.tsv} \
         --output-translations {params.translation_template} \
-        --output-fasta {output.alignment} 
+        --output-fasta {output.alignment} >> log.out 2>&1
         """
 
 rule tree:
@@ -183,10 +190,11 @@ rule tree:
     threads: 9
     shell:
         """
+        echo -e "\ntree:" >> log.out
         augur tree \
             --alignment {input.alignment} \
             --nthreads {threads}\
-            --output {output.tree} \
+            --output {output.tree} >> log.out 2>&1
         """
 
 # midpoint.R: not needed; done by refine "--root mid_point".
@@ -208,9 +216,14 @@ rule refine:
             --divergence-unit mutations-per-site \
             --output-node-data {output.node_data} \
             --output-tree {output.tree}
+        
+        input_tips=$(grep -oE '[^\(\),]+' {input.tree} | sort | uniq | wc -l)
+        output_tips=$(grep -oE '[^\(\),]+' {output.tree} | sort | uniq | wc -l)
+        dropped=$((input_tips - output_tips))
+        echo -e "\nrefine: Dropped sequences due to clock filter: $dropped" >> log.out
         """
 
-###### Subtyping & Chainsaw ######
+###### node-wise clustering ######
 rule subtyping_params:
     input:
         "results/tree.midpoint.nwk"
@@ -218,6 +231,7 @@ rule subtyping_params:
         "results/mindiv0_01.maxpat1_2.subtypes.csv"
     shell:
         """
+        echo -e "\nnode-wise clustering" >> log.out
         python scripts/subtyping.py {input} {output} --mindiv 0.01 --maxpat 1.2
         """
 
@@ -231,6 +245,40 @@ rule subtyping_grid:
         python scripts/subtyping.py {input} {output}
         """
 
+rule subtree_grid_plot:
+    """ 
+    Plot subtree grid
+    """
+    input:
+        grid = "results/subtree-grid.csv",
+        params_set = "results/mindiv0_01.maxpat1_2.subtypes.csv"
+    output:
+        out_pdf = "results/plots/subtree-grid.pdf",
+        nsubtrees = "results/plots/nsubtrees.pdf"
+    shell:
+        "Rscript scripts/subtree-grid.R {input.grid} {input.params_set} {output.out_pdf} {output.nsubtrees} >> log.out"
+
+##### edge-wise clustering #####
+rule chainsaw:
+    """
+    Partition tree by cutting on internal branches with length 
+    exceeding threshold.
+    """
+    input:
+        infile = "results/tree.midpoint.nwk"
+    output:
+        outfile = "results/chainsaw.subtrees.nwk" if FORMAT == "trees" else ("results/chainsaw_output.csv" if CUTOFF is None else f"results/chainsaw-{CUTOFF}.{FORMAT}.csv")  
+    params:
+        cutoff = lambda wildcards: "" if CUTOFF is None else f"--cutoff {CUTOFF}",
+        nbin = 20
+    shell:
+        """
+        echo -e "\nedge-wise clustering" >> log.out
+        python scripts/chainsaw.py {input.infile} {output.outfile} \
+        {params.cutoff} --nbin {params.nbin} --format {FORMAT} >> log.out 
+        """
+
+# cutoff = None -> creates a list of different cutoff values
 rule auto_chainsaw:
     """
     This script is used to generate the data required to produce Figures
@@ -246,26 +294,7 @@ rule auto_chainsaw:
     shell:
         """
         python scripts/auto-chainsaw.py {input}\
-        {params.gene} \
-        {output}
-        """
-
-rule chainsaw:
-    """
-    Partition tree by cutting on internal branches with length 
-    exceeding threshold.
-    """
-    input:
-        infile = "results/tree.midpoint.nwk"
-    output:
-        outfile = "results/chainsaw.subtrees.nwk" if FORMAT == "trees" else ("results/chainsaw_output.csv" if CUTOFF is None else f"results/chainsaw-{CUTOFF}.{FORMAT}.csv")  
-    params:
-        cutoff = lambda wildcards: "" if CUTOFF is None else f"--cutoff {CUTOFF}",
-        nbin = 20
-    shell:
-        """
-        (python scripts/chainsaw.py {input.infile} {output.outfile} \
-        {params.cutoff} --nbin {params.nbin} --format {FORMAT}) > log.out 
+        {params.gene} {output}
         """
 
 ##### Plotting #####
@@ -292,15 +321,16 @@ rule chainsaw_plot:
         label = f"results/chainsaw-{CUTOFF}.{FORMAT}.csv",
         # label = "results/chainsaw-0.008.labels.csv",
     params:
-        keep_NA = "True", # "True" or "False"
+        keep_NA = "False", # "True" or "False"
+        cutoff_subtree = {CUTOFF},
     output:
         out_pdf = "results/plots/chainsaw.pdf",
-        out_table = "results/plots/chainsaw-table.pdf" # chainsaw-table has currently random numbers until fixed
+        out_table = f"results/plots/chainsaw-table_{CUTOFF}.pdf" 
     shell:
         """
         Rscript scripts/chainsaw-plot.R {input.nsubtrees} {input.label} \
         {output.out_pdf} {output.out_table} \
-        {params.keep_NA} \
+        {params.keep_NA} {params.cutoff_subtree} \
         >> log.out
         """
 
@@ -316,25 +346,12 @@ rule coldates_plot: # Figure S1
     shell:
         "Rscript scripts/coldates.R {input} {output} >> log.out"
 
-
-rule subtree_grid_plot:
-    """ 
-    Plot subtree grid
-    """
-    input:
-        grid = "results/subtree-grid.csv",
-        params_set = "results/mindiv0_01.maxpat1_2.subtypes.csv"
-    output:
-        out_pdf = "results/plots/subtree-grid.pdf",
-        nsubtrees = "results/plots/nsubtrees.pdf"
-    shell:
-        "Rscript scripts/subtree-grid.R {input.grid} {input.params_set} {output.out_pdf} {output.nsubtrees} >> log.out"
-
-
 rule clean:
     shell:
         """
         find results/plots/ -mindepth 1 ! -type d -delete
         find results/translations/ -mindepth 1 ! -type d -delete
         find results/ -mindepth 1 ! -type d -delete
+        rm log.out
+        rm Rplots.pdf
         """
