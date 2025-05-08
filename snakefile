@@ -15,14 +15,16 @@ EXCLUDE = "data/exclude.txt"
 GFF_PATH = "data/genome_annotation.gff3" # annotation gff3 for EV-D68
 REFERENCE_PATH = "data/reference.fasta" # EV-D68 reference sequence
 ROOTING = "mid_point" # mid-point rooting of tree (using augur refine instead of midpoint.R)
-CUTOFF = 0.007 # set to None to get a list of different cutoff values; vary between 0.005 and 0.011
+CUTOFF = 0.008 # set to None to get a list of different cutoff values; vary between 0.005 and 0.011
 FORMAT = "labels" # "summary", "labels" or "trees"
-MAX_DATE = "2017-01-01"
+MAX_DATE = "2019-01-01"
 
+# CUTOFFs = [0.005, 0.006,0.007, 0.008,0.009,0.01,0.011, 0.012, 0.013, 0.014, 0.015]
+# pdfunite results/plots/chainsaw-table_0.0*.pdf chainsaw-table_2018.pdf
+    
 ## Run all rules in snakemake
 rule all:
     input:
-        "results/plots/chainsaw.pdf",
         f"results/plots/chainsaw-table_{CUTOFF}.pdf",
         "results/plots/treeplots.png",
         "results/plots/genbank-nseqs.pdf",
@@ -308,9 +310,11 @@ rule plot_trees:
     output:
         plot_png = "results/plots/treeplots.png",
         plot_pdf = "results/plots/inferred.pdf"
+    params:
+        replace_labels = "True"
     shell:
         """
-        Rscript scripts/plot-trees.R {input.tree} {output.plot_png} {output.plot_pdf} >> log.out
+        Rscript scripts/plot-trees.R {input.tree} {output.plot_png} {output.plot_pdf} {params.replace_labels} >> log.out
         """
 
 
@@ -322,9 +326,9 @@ rule chainsaw_plot:
         # label = "results/chainsaw-0.008.labels.csv",
     params:
         keep_NA = "False", # "True" or "False"
-        cutoff_subtree = {CUTOFF},
+        cutoff_subtree = {CUTOFF}, # best number of subtrees: 0.008
     output:
-        out_pdf = "results/plots/chainsaw.pdf",
+        out_pdf = "results/plots/chainsaw.tiff",
         out_table = f"results/plots/chainsaw-table_{CUTOFF}.pdf" 
     shell:
         """

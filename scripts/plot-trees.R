@@ -2,17 +2,20 @@ suppressPackageStartupMessages({
   require(ggfree)
   require(phangorn)
   require(xtable)
+  library(dplyr)
 })
 
 args <- commandArgs(trailingOnly = TRUE)
 
-if (length(args) < 3) {
-  stop("Usage: Rscript plot-trees.R <tree_file> <output_png> <output_pdf>")
-} 
-
 tree_file <- args[1]
 output_png <- args[2]
 output_pdf <- args[3]
+replace_labels <- args[4]
+
+# tree_file = "results/tree.midpoint.nwk"
+# output_png = "results/plots/treeplots.png"
+# output_pdf = "results/plots/inferred.pdf"
+# replace_labels = "False"
 
 # while(FALSE){
   phy <- read.tree(tree_file) #"gb-relabeled-ha.ft2-mle.mid.nwk")
@@ -22,6 +25,24 @@ output_pdf <- args[3]
   idx <- which(!grepl("^.*_([A-Z0-9]{1,5})_.*$", eL$nodes$label))
   eL$nodes$sero[idx] <- NA # nodes
   eL$nodes$sero <- toupper(eL$nodes$sero)
+  
+  if (replace_labels=="True"){
+    output_png = sub("\\.png$", "_subtree.png", output_png)
+    new = read.csv("results/chainsaw-0.008.labels.csv")
+    new = new %>%
+      dplyr::mutate(new_tip = paste0(stringr::str_split_fixed(tip.label, "_", 2)[,1], "_S", subtree, "_1"))
+    
+    label_map <- setNames(new$new_tip, new$tip.label)
+    
+    eL$nodes <- eL$nodes %>%
+      mutate(label = ifelse(label %in% names(label_map), label_map[label], label))
+    
+    eL$nodes$sero <- gsub("^.*_([S0-9]{1,5})_.*$", "\\1", eL$nodes$label)
+    idx <- which(!grepl("^.*_([S0-9]{1,5})_.*$", eL$nodes$label))
+    eL$nodes$sero[idx] <- NA # nodes
+    eL$nodes$sero <- toupper(eL$nodes$sero)
+  }
+  
   
   # hphy <- read.tree("gb-relabeled-ha.ft2-mle.mid.nwk")
   # hphy <- ladderize(hphy)

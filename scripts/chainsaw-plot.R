@@ -4,7 +4,7 @@ args <- commandArgs(trailingOnly = TRUE)
 
 nsubtrees <- args[1] # nsubtrees <- "results/chainsaw-nsubtrees.csv"
 label <- args[2] # label <- "results/chainsaw-0.008.labels.csv"
-out_pdf <- args[3] # out_pdf <- "results/plots/chainsaw.pdf"
+out_pdf <- args[3] # out_pdf <- "results/plots/chainsaw.tiff"
 out_table <- args[4] # out_table <- "results/plots/chainsaw-table.pdf"
 keep_na <- args[5] # keep_na <- "False"
 cutoff_tree <- as.numeric(args[6]) # cutoff_tree <- 0.008
@@ -19,7 +19,8 @@ chainsaw <- read.csv(nsubtrees)
 chainsaw <- chainsaw[chainsaw$cutoff >= cutoff_tree,]  # drop cutoffs that yield too many subtrees (37 trees)
 
 # manual runs of chainsaw.py
-pdf(out_pdf, width=5, height=4)
+# pdf(out_pdf, width=5, height=4)
+tiff(out_pdf, width=5, height=4, res=300,units="in")
 {par(mar=c(5,5,1,5))
 
 plot(chainsaw$cutoff, chainsaw$nsubtrees, type='n', 
@@ -58,7 +59,7 @@ lines(chainsaw$cutoff, chainsaw$nsubtrees, type='s', col='royalblue')
 load('results/plots/serotypes.RData')
 
 xmax = chainsaw$cutoff[which(chainsaw$nsubtrees==length(serotypes))]
-segments(x0=0, x1=xmax, y0=length(serotypes), col='royalblue', lty=2)
+segments(x0=0, x1=ifelse(is.null(xmax),0,xmax), y0=length(serotypes), col='royalblue', lty=2)
 text(x=xmax*1.17, y=length(serotypes), label=paste0(length(serotypes)), col="royalblue", cex=0.5)
 }
 # print(paste("saved to", out_pdf))
@@ -132,17 +133,14 @@ if (keep_na=="False") {
 tab <- table(labels$subtree, labels$serotype)
 #xtable(tab)  # used to embed table into LaTeX document
 
-# tab <- matrix(sample(0:50, nrow(tab) * ncol(tab), replace = TRUE),
-#               nrow = nrow(tab),
-#               ncol = ncol(tab),
-#               dimnames = dimnames(tab))
-
+# filter for at least 3 strains per subtree
+# tab[tab<3] = 0.0
+# tab <- tab[!rowSums(tab)==0,]
 
 # generate a plot
 x <- tab / apply(tab, 1, sum)
 # if (doFull) {
 xval <- 1:length(colnames(x))  # not sure if it would be better to keep original names
-translation <- rbind(1:length(colnames(x)), colnames(x))
 # } else {
 #   xval <- as.integer(gsub("N([0-9]+)", "\\1", colnames(x))) 
 # }
@@ -172,7 +170,7 @@ for (i in 1:nrow(x)) {
     if (count>0 && xx>0.1) text(j-0.5, i-0.5, adj=0.5, label=count, cex=0.5)
   }
 }
-for (i in 0:ncol(x)-1) {
+for (i in 0:nrow(x)-1) {
   abline(v=i, col='grey80')
   abline(h=i, col='grey80')
 }
