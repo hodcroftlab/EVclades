@@ -93,7 +93,7 @@ cutoff <- args[5]
   # })
   # save(h.edges, n.edges, file="results/plots/edge-index.RData")
 #   save(edges, file="results/plots/edge-index.RData")
-#   save(serotypes, file ="results/plots/serotypes.RData")
+  save(serotypes, file ="results/plots/serotypes.RData")
 # # }
 # load('results/plots/edge-index.RData')
 
