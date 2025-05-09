@@ -11,11 +11,12 @@ tree_file <- args[1]
 output_png <- args[2]
 output_pdf <- args[3]
 replace_labels <- args[4]
+cutoff <- args[5]
 
 # tree_file = "results/tree.midpoint.nwk"
 # output_png = "results/plots/treeplots.png"
 # output_pdf = "results/plots/inferred.pdf"
-# replace_labels = "False"
+# replace_labels = "True"
 
 # while(FALSE){
   phy <- read.tree(tree_file) #"gb-relabeled-ha.ft2-mle.mid.nwk")
@@ -28,7 +29,7 @@ replace_labels <- args[4]
   
   if (replace_labels=="True"){
     output_png = sub("\\.png$", "_subtree.png", output_png)
-    new = read.csv("results/chainsaw-0.008.labels.csv")
+    new = read.csv(paste0("results/chainsaw-",cutoff,".labels.csv"))
     new = new %>%
       dplyr::mutate(new_tip = paste0(stringr::str_split_fixed(tip.label, "_", 2)[,1], "_S", subtree, "_1"))
     
@@ -60,10 +61,10 @@ replace_labels <- args[4]
   # nL$nodes$sero <- toupper(nL$nodes$sero)
   
   # save(hL, nL, file="~/workspace/fluclades/plots/treeplots.RData")
-  save(eL, file="results/plots/treeplots.RData")
-# }
-
-load('results/plots/treeplots.RData')
+#   save(eL, file="results/plots/treeplots.RData")
+# # }
+# 
+# load('results/plots/treeplots.RData')
 
 # locate edges - this takes a while, so run once and save results!
 # while(FALSE) {
@@ -91,10 +92,10 @@ load('results/plots/treeplots.RData')
   #   find.clade(nL, tips=nL$nodes$label[idx])
   # })
   # save(h.edges, n.edges, file="results/plots/edge-index.RData")
-  save(edges, file="results/plots/edge-index.RData")
-  save(serotypes, file ="results/plots/serotypes.RData")
-# }
-load('results/plots/edge-index.RData')
+#   save(edges, file="results/plots/edge-index.RData")
+#   save(serotypes, file ="results/plots/serotypes.RData")
+# # }
+# load('results/plots/edge-index.RData')
 
 
 # plot functions
@@ -120,7 +121,7 @@ colour.clade <- function(obj, idx, col, skip=5, offset=0.03, cex=1, lwd=2) {
 res <- 600
 png(output_png, width=5*res, height=5*res, res=res) #width=10*res for HA
 # par(mfrow=c(1,2))
-par(mfrow=c(1,1), mar=c(5,5,1,1), cex=0.8)
+{par(mfrow=c(1,1), mar=c(5,5,1,1), cex=0.8)
 
 plot(eL, label='n', lwd=1, mar=c(0,1,0,0))
 add.scalebar(eL,
@@ -132,7 +133,7 @@ pal <- gg.rainbow(length(serotypes))
 for (i in 1:length(serotypes)) {
   skip <- ifelse(i %in% c(1,3), 20, 2)
   colour.clade(eL, edges[[i]], col=pal[i], lwd=1, skip=skip, cex=0.8)
-}
+}}
 # plot(nL, label='n', lwd=1, mar=c(0,0,0,1))
 # add.scalebar(nL, y0=1000, len=0.1, dy=1000, cex=0.7)
 # pal <- gg.rainbow(11)
@@ -142,7 +143,7 @@ for (i in 1:length(serotypes)) {
 #   colour.clade(nL, n.edges[[i]], col=pal[i], lwd=1, skip=skip, cex=0.8)
 # }
 invisible(dev.off())
-
+if(replace_labels=="True"){stop("turn 'replace_labels = False' to continue")}
 # get.tips in ggfree has an error - overwrite with this function
 get.tips <- function(parent, obj, res = c()) {
   children <- obj$edges$child[obj$edges$parent == parent]

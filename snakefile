@@ -311,10 +311,12 @@ rule plot_trees:
         plot_png = "results/plots/treeplots.png",
         plot_pdf = "results/plots/inferred.pdf"
     params:
-        replace_labels = "True"
+        replace_labels = "False",
+        cutoff_subtree = {CUTOFF},
     shell:
         """
-        Rscript scripts/plot-trees.R {input.tree} {output.plot_png} {output.plot_pdf} {params.replace_labels} >> log.out
+        Rscript scripts/plot-trees.R {input.tree} {output.plot_png} {output.plot_pdf} \
+        {params.replace_labels} {params.cutoff_subtree} >> log.out
         """
 
 
