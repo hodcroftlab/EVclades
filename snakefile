@@ -18,6 +18,7 @@ ROOTING = "mid_point" # mid-point rooting of tree (using augur refine instead of
 CUTOFF = 0.008 # set to None to get a list of different cutoff values; vary between 0.005 and 0.011
 FORMAT = "labels" # "summary", "labels" or "trees"
 MAX_DATE = "2017-01-01"
+TYPE = "AA" # "AA" or "NT"
 
 # CUTOFFs = [0.005, 0.006,0.007, 0.008,0.009,0.01,0.011, 0.012, 0.013, 0.014, 0.015]
 # pdfunite results/plots/chainsaw-table_0.0*.pdf chainsaw-table_2018.pdf
