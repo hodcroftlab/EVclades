@@ -1,6 +1,6 @@
 # Genetic Taxonomy of Enterovirus D68 Clades
 
-**EVclades** is an Enterovirus-adapted version of Art Poon’s [fluclades](https://github.com/PoonLab/fluclades) pipeline for automated clade assignment. This version has been customized for *Enterovirus D68* (EV-D68), using protein-level phylogenies and metadata to define robust, reproducible clades based on tree structure and sequence divergence.
+**EVclades** is an Enterovirus-adapted version of Art Poon’s [fluclades](https://github.com/PoonLab/fluclades) pipeline for automated clade assignment. This version has been customized for *Enterovirus D68* (EV-D68), using phylogenies and metadata to define robust, reproducible clades based on tree structure and sequence divergence.
 
 ## Data
 
@@ -17,8 +17,8 @@ Sequence and metadata files (`sequences.fasta`, `metadata.tsv`, `reference.gbk`,
 - **`subtyping.py`** – Implements nodewise clustering by calculating divergence and patristic distances at internal nodes to assign sequences to clades.
 - **`chainsaw.py`** – Python script for edgewise clustering based on internal branch lengths. Requires Biopython.
     - Run with no arguments to print a histogram of branch lengths.
-    - Use `-cutoff` to define a threshold for subtree cutting.
-    - Use `f` to select output format: `summary` (default) or `labels` (CSV listing tip-to-subtree assignments).
+    - Use `CUTOFF` to define a threshold for subtree cutting.
+    - Use `FORMAT` to select output format: `summary` (default), `tree` (a set of Newick tree strings) or `labels` (CSV listing tip-to-subtree assignments).
         
         Also computes normalized mutual information between subtree assignments and known subtype labels.
         
@@ -31,5 +31,5 @@ Sequence and metadata files (`sequences.fasta`, `metadata.tsv`, `reference.gbk`,
     
     Helps visualize parameter sensitivity for EV-D68 protein phylogenies.
     
-- **`coldates.R`** – Generates a barplot of EV-D68 sequence deposition by year. Originally created for supplementary material.
+- **`coldates.R`** – Generates a barplot of EV-D68 sequence deposition by year.
 - **`subtree-grid.R`** – Produces grid-based summary figures to visually compare subtree clustering results across different parameters.
