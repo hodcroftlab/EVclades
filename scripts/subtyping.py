@@ -37,7 +37,7 @@ def choose2(x):
     return x*(x-1)/2
 
 # calculate mean node-to-tip distance from tips down to root
-print("Processing tips...")
+print("\tProcessing tips...")
 for tip in phy.get_terminals():
     tip.ntips = 1
     tip.bl_tot = 0
@@ -52,7 +52,7 @@ for parent in phy.get_nonterminals():
         child.vlen = vlen
         # TODO: this doesn't really work, figure out why....
 
-print("Calculating subtree stats...")
+print("\tCalculating subtree stats...")
 for node in phy.get_nonterminals(order="postorder"):
     node.ntips = 0
     node.bl_tot = 0  # sum all branch lengths above this node
@@ -156,7 +156,7 @@ def count_labels(subtree): ## H3N8 for example; subtypes in flu
     return counts
 
 
-print("Searching for subtrees...")
+print("\tSearching for subtrees...")
 
 if args.mindiv is None or args.maxpat is None:
     # generate subtrees over a grid of threshold settings
@@ -198,7 +198,7 @@ else:
     subtrees = []
     find_subtrees(args.mindiv, args.maxpat)
 
-    print(f"Found {len(subtrees)} subtrees, writing outputs...")
+    print(f"\tFound {len(subtrees)} subtrees, writing outputs...")
     writer = csv.writer(args.outfile)
     writer.writerow(['subtree', 'serotype', 'count'])
 

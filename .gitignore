@@ -17,6 +17,7 @@ __pycache__
 LICENSE
 
 log.out
+*.log
 R_packages*
 
 # unused scripts from fluclades

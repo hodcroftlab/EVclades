@@ -7,31 +7,58 @@ import os
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv())
 
-## Define paths and parameters
+## Define paths
 EMAIL = os.environ.get("EMAIL") # for Entrez transactions; taken from .env file
-MIN_LENGTH = "6000" # min sequence length for whole genome run
 ID_FIELD = "accession" # accession or strain, required for augur functions
 EXCLUDE = "data/exclude.txt"
 GFF_PATH = "data/genome_annotation.gff3" # annotation gff3 for EV-D68
 REFERENCE_PATH = "data/reference.fasta" # EV-D68 reference sequence
+
+## Define parameters
+CDS_LIST = ["VP4", "VP2", "VP3", "VP1", "2A", "2B", "2C", "3A", "3B", "3C", "3D"]
+MIN_LENGTH = "6000" # min sequence length for whole genome run
 ROOTING = "mid_point" # mid-point rooting of tree (using augur refine instead of midpoint.R)
-CUTOFF = 0.008 # set to None to get a list of different cutoff values; vary between 0.005 and 0.011
 FORMAT = "labels" # "summary", "labels" or "trees"
+
+# cut-off and max-date
 MAX_DATE = "2017-01-01"
-TYPE = "AA" # "AA" or "NT"
+CUTOFF = 0.008 # set to None to get a list of different cutoff values; vary between 0.005 and 0.011
 
 # CUTOFFs = [0.005, 0.006,0.007, 0.008,0.009,0.01,0.011, 0.012, 0.013, 0.014, 0.015]
 # pdfunite results/plots/chainsaw-table_0.0*.pdf chainsaw-table_2018.pdf
-    
+
+#params for node-wise clustering
+MINDIV = "0.01"
+MAXPAT = "1.2"
+
+
+wildcard_constraints:
+    TYPE = "AA|NT" # amino acid or nucleotide run
+
 ## Run all rules in snakemake
 rule all:
     input:
-        f"results/plots/chainsaw-table_{CUTOFF}.pdf",
-        "results/plots/treeplots.png",
+        expand("results/plots/chainsaw-table_{CUTOFF}_{TYPE}.pdf", TYPE=["AA", "NT"], CUTOFF=CUTOFF),
+        expand("results/plots/treeplots_{TYPE}.png", TYPE=["AA", "NT"]),
         "results/plots/genbank-nseqs.pdf",
+        alignment = "results/aligned_NT.fasta"
         # "results/plots/subtree-grid.pdf",
         # "results/plots/nsubtrees.pdf"
 
+rule all_NT:
+    input:
+        expand("results/plots/chainsaw-table_{CUTOFF}_NT.pdf", CUTOFF=CUTOFF),
+        "results/plots/treeplots_NT.png",
+        "results/plots/genbank-nseqs.pdf",
+        "results/aligned_NT.fasta",
+        "results/plots/subtree-grid_NT.pdf",
+        "results/plots/nsubtrees_NT.pdf"
+
+rule all_AA:
+    input:
+        expand("results/plots/chainsaw-table_{CUTOFF}_AA.pdf", CUTOFF=CUTOFF),
+        "results/plots/treeplots_AA.png",
+        "results/aligned_NT.fasta"
 
 ###### Alignment & Tree building ######
 ## get-metadata.py: replaced by ingest
@@ -97,9 +124,9 @@ rule relabel_fasta:
         "results/relabeled_seqs.fasta"
     shell:
         """
-        echo -e "\nrelabel_fasta:" >> log.out
+        echo -e "\nrelabel_fasta:" 
         python3 scripts/relabel-fasta.py {input.fasta} {input.metadata} \
-        {input.subgenotype} {output} >> log.out 2>&1
+        {input.subgenotype} {output} 
         """
 
 # added subtype in relabel_fasta - using whole genome only (for now)
@@ -114,25 +141,22 @@ rule relabel_fasta:
 #     shell:
 #         "python scripts/filter-prot.py {input} {output}"
 
-# run alignment & translation before compressing?
-
 rule compress_sequences:
     """ 
     Compress sequences, remove duplicates
     """
     input:
-        "results/relabeled_seqs.fasta"
+        seqs = lambda wildcards: "results/relabeled_seqs.fasta" if wildcards.TYPE == "NT" else "results/aligned_AA.fasta",
+    params:
+        type = lambda wildcards: "NT" if wildcards.TYPE == "NT" else "AA", 
     output:
-        fasta = "results/compressed_seqs.fasta",
-        csv = "results/duplicates.csv"
+        fasta = "results/compressed_seqs_{TYPE}.fasta",
+        csv = "results/duplicates_{TYPE}.csv"
     shell:
         """
-        echo -e "\ncompress_sequences:" >> log.out
-        python scripts/compress-seqs.py {input} {output.fasta} {output.csv} >> log.out 2>&1
+        echo -e "\ncompress_sequences:" 
+        python scripts/compress-seqs.py {input.seqs} {output.fasta} {output.csv} {params.type} 
         """
-
-
-## concat-genes.py: skipped; specific to Influenza?
 
 rule align:
     message:
@@ -140,12 +164,12 @@ rule align:
         Aligning sequences to {input.reference} using Nextclade3.
         """
     input:
-        sequences = "results/compressed_seqs.fasta",
+        sequences = "results/compressed_seqs_NT.fasta",
         reference = REFERENCE_PATH,
         annotation = GFF_PATH,
     output:
-        alignment = "results/aligned.fasta",
-        tsv = "results/nextclade.tsv",
+        alignment = "results/aligned_NT.fasta",
+        tsv = "results/nextclade_NT.tsv",
     params:
         translation_template = lambda w: "results/translations/cds_{cds}.translation.fasta",
         #high-diversity 
@@ -178,26 +202,58 @@ rule align:
         --include-reference false \
         --output-tsv {output.tsv} \
         --output-translations {params.translation_template} \
-        --output-fasta {output.alignment} >> log.out 2>&1
+        --output-fasta {output.alignment} 
         """
 
-rule tree:
+rule concat_genes:
+    message: "Translating polyprotein for all samples"
+    params:
+        translation = "results/translations/cds_XX.translation.fasta", # Translation output from Nextclade3; XX is the CDS name
+        cds = " ".join(CDS_LIST),                               # List of CDS to translate
+
+    input:
+        nt_alignment = "results/aligned_NT.fasta",
+        annotation = GFF_PATH,                               # GFF file with CDS annotations
+        reference = REFERENCE_PATH,                         # Reference genome (optional for now)
+
+    output:
+        aa_alignment = "results/aligned_AA.fasta"  # Output AA polyprotein sequences
+    shell:
+        """
+        python scripts/concat_genes.py \
+            --translation {params.translation} \
+            --cds {params.cds}\
+            --annotation {input.annotation} \
+            --reference {input.reference} \
+            --alignment {input.nt_alignment} \
+            -o {output.aa_alignment} 
+        """
+
+#TODO: More robust ML tree: -n 10, --epsilon 0.01, -B 1000 (add as params)
+rule tree: 
     message:
         """
         Creating a maximum likelihood tree
         """
     input:
-        alignment = "results/aligned.fasta",
+        alignment = lambda wildcards: "results/aligned_NT.fasta" if wildcards.TYPE == "NT" else "results/compressed_seqs_AA.fasta",
+    params:
+        # model = "auto" -> find optimal model; NT = "GTR+F+I+R4" with 2 cores (-ninit 2 -n 2 --epsilon 0.05); AA = FLAVI+F+R4 with 2 cores (-ninit 2 -n 2 --epsilon 0.05)
+        model = lambda wildcards: "FLAVI+F+R4" if wildcards.TYPE == "AA" else "GTR+F+I+R4",  # "JTT" and "GTR" were defaults
     output:
-        tree = "results/tree_raw.nwk",
-    threads: 9
+        tree = "results/tree_raw_{TYPE}.nwk",
+    threads: 2
     shell:
         """
-        echo -e "\ntree:" >> log.out
+        echo -e "\nCreating tree for {wildcards.TYPE} alignment..."
         augur tree \
             --alignment {input.alignment} \
-            --nthreads {threads}\
-            --output {output.tree} >> log.out 2>&1
+            --method iqtree \
+            --substitution-model {params.model} \
+            --nthreads {threads} \
+            --tree-builder-args "-ninit 2 -n 2 --epsilon 0.05" \
+            --output {output.tree} \
+            --override-default-args
         """
 
 # midpoint.R: not needed; done by refine "--root mid_point".
@@ -205,46 +261,68 @@ rule tree:
 rule refine:
     input:
         tree=rules.tree.output.tree,
-        alignment="results/aligned.fasta",
+        alignment="results/aligned_{TYPE}.fasta",
     output:
-        tree="results/tree.midpoint.nwk",
-        node_data="results/branch_lengths.json",
+        tree="results/tree.midpoint_{TYPE}.nwk",
+        node_data="results/branch_lengths_{TYPE}.json",
+
     shell:
         """
-        augur refine \
-            --tree {input.tree} \
-            --alignment {input.alignment} \
-            --root {ROOTING} \
-            --keep-polytomies \
-            --divergence-unit mutations-per-site \
-            --output-node-data {output.node_data} \
-            --output-tree {output.tree}
+        if [ "{wildcards.TYPE}" == "AA" ]; then
+            echo -e "\nRunning refine_aa for AA sequences..."
+            python scripts/refine_aa.py \
+                --tree {input.tree} \
+                --alignment {input.alignment} \
+                --divergence-unit mutations-per-site \
+                --output-node-data {output.node_data} \
+                --output-tree {output.tree} 
+
+        else
+            echo -e "\nRunning augur refine for NT sequences..."
+            augur refine \
+                --tree {input.tree} \
+                --alignment {input.alignment} \
+                --root {ROOTING} \
+                --keep-polytomies \
+                --divergence-unit mutations-per-site \
+                --output-node-data {output.node_data} \
+                --output-tree {output.tree}
+        fi
         
         input_tips=$(grep -oE '[^\(\),]+' {input.tree} | sort | uniq | wc -l)
         output_tips=$(grep -oE '[^\(\),]+' {output.tree} | sort | uniq | wc -l)
         dropped=$((input_tips - output_tips))
-        echo -e "\nrefine: Dropped sequences due to clock filter: $dropped" >> log.out
+        echo -e "\nrefine: Dropped sequences due to clock filter: $dropped" 
         """
 
 ###### node-wise clustering ######
 rule subtyping_params:
+    message:
+        """
+        Subtyping (node-wise clustering) for {wildcards.TYPE} tree
+        """
     input:
-        "results/tree.midpoint.nwk"
+        "results/tree.midpoint_{TYPE}.nwk"
     output:
-        "results/mindiv0_01.maxpat1_2.subtypes.csv"
+        f"results/mindiv{MINDIV}_maxpat{MAXPAT}.subtypes_{{TYPE}}.csv"
+    params:
+        mindiv = MINDIV,
+        maxpat = MAXPAT,
     shell:
         """
-        echo -e "\nnode-wise clustering" >> log.out
-        python scripts/subtyping.py {input} {output} --mindiv 0.01 --maxpat 1.2
+        echo -e "\nnode-wise clustering" 
+        python scripts/subtyping.py {input} {output} --mindiv {params.mindiv} --maxpat {params.maxpat}
         """
+
 
 rule subtyping_grid:
     input:
-        "results/tree.midpoint.nwk"
+        "results/tree.midpoint_{TYPE}.nwk"
     output:
-        "results/subtree-grid.csv"
+        "results/subtree-grid_{TYPE}.csv"
     shell:
         """
+        echo -e "\nsubtree-grid" 
         python scripts/subtyping.py {input} {output}
         """
 
@@ -253,13 +331,13 @@ rule subtree_grid_plot:
     Plot subtree grid
     """
     input:
-        grid = "results/subtree-grid.csv",
-        params_set = "results/mindiv0_01.maxpat1_2.subtypes.csv"
+        grid = "results/subtree-grid_{TYPE}.csv",
+        params_set = rules.subtyping_params.output
     output:
-        out_pdf = "results/plots/subtree-grid.pdf",
-        nsubtrees = "results/plots/nsubtrees.pdf"
+        out_pdf = "results/plots/subtree-grid_{TYPE}.pdf",
+        nsubtrees = "results/plots/nsubtrees_{TYPE}.pdf"
     shell:
-        "Rscript scripts/subtree-grid.R {input.grid} {input.params_set} {output.out_pdf} {output.nsubtrees} >> log.out"
+        "Rscript scripts/subtree-grid.R {input.grid} {input.params_set} {output.out_pdf} {output.nsubtrees} "
 
 ##### edge-wise clustering #####
 rule chainsaw:
@@ -268,17 +346,17 @@ rule chainsaw:
     exceeding threshold.
     """
     input:
-        infile = "results/tree.midpoint.nwk"
+        infile = "results/tree.midpoint_{TYPE}.nwk"
     output:
-        outfile = "results/chainsaw.subtrees.nwk" if FORMAT == "trees" else ("results/chainsaw_output.csv" if CUTOFF is None else f"results/chainsaw-{CUTOFF}.{FORMAT}.csv")  
+        outfile = "results/chainsaw.subtrees_{TYPE}.nwk" if FORMAT == "trees" else ("results/chainsaw_output_{TYPE}.csv" if CUTOFF is None else f"results/chainsaw-{CUTOFF}.{FORMAT}_{{TYPE}}.csv")  
     params:
         cutoff = lambda wildcards: "" if CUTOFF is None else f"--cutoff {CUTOFF}",
         nbin = 20
     shell:
         """
-        echo -e "\nedge-wise clustering" >> log.out
+        echo -e "\nedge-wise clustering" 
         python scripts/chainsaw.py {input.infile} {output.outfile} \
-        {params.cutoff} --nbin {params.nbin} --format {FORMAT} >> log.out 
+        {params.cutoff} --nbin {params.nbin} --format {FORMAT}  
         """
 
 # cutoff = None -> creates a list of different cutoff values
@@ -289,9 +367,9 @@ rule auto_chainsaw:
     Results are written to stdout in CSV format.
     """
     input:
-        "results/tree.midpoint.nwk"
+        "results/tree.midpoint_{TYPE}.nwk"
     output:
-        "results/chainsaw-nsubtrees.csv"
+        "results/chainsaw-nsubtrees_{TYPE}.csv"
     params:
         gene = "full" # "full" or "VP1",
     shell:
@@ -306,39 +384,37 @@ rule plot_trees:
     Create tree plots
     """
     input:
-        tree = "results/tree.midpoint.nwk",
+        tree = "results/tree.midpoint_{TYPE}.nwk",
         # tree = "results/chainsaw.subtrees.nwk"
     output:
-        plot_png = "results/plots/treeplots.png",
-        plot_pdf = "results/plots/inferred.pdf"
+        plot_png = "results/plots/treeplots_{TYPE}.png",
+        plot_pdf = "results/plots/inferred_{TYPE}.pdf"
     params:
         replace_labels = "False",
         cutoff_subtree = {CUTOFF},
     shell:
         """
         Rscript scripts/plot-trees.R {input.tree} {output.plot_png} {output.plot_pdf} \
-        {params.replace_labels} {params.cutoff_subtree} >> log.out
+        {params.replace_labels} {params.cutoff_subtree} 
         """
 
 
 
 rule chainsaw_plot:
     input:
-        nsubtrees = "results/chainsaw-nsubtrees.csv",
-        label = f"results/chainsaw-{CUTOFF}.{FORMAT}.csv",
-        # label = "results/chainsaw-0.008.labels.csv",
+        nsubtrees = "results/chainsaw-nsubtrees_{TYPE}.csv",
+        label = f"results/chainsaw-{CUTOFF}.{FORMAT}_{{TYPE}}.csv"
     params:
-        keep_NA = "False", # "True" or "False"
-        cutoff_subtree = {CUTOFF}, # best number of subtrees: 0.008
+        keep_NA = "False",
+        cutoff_subtree = CUTOFF
     output:
-        out_pdf = "results/plots/chainsaw.tiff",
-        out_table = f"results/plots/chainsaw-table_{CUTOFF}.pdf" 
+        out_pdf = "results/plots/chainsaw_{TYPE}.tiff",
+        out_table = f"results/plots/chainsaw-table_{CUTOFF}_{{TYPE}}.pdf"
     shell:
         """
         Rscript scripts/chainsaw-plot.R {input.nsubtrees} {input.label} \
         {output.out_pdf} {output.out_table} \
-        {params.keep_NA} {params.cutoff_subtree} \
-        >> log.out
+        {params.keep_NA} {params.cutoff_subtree}
         """
 
 
@@ -351,7 +427,7 @@ rule coldates_plot: # Figure S1
     output:
         "results/plots/genbank-nseqs.pdf"
     shell:
-        "Rscript scripts/coldates.R {input} {output} >> log.out"
+        "Rscript scripts/coldates.R {input} {output} "
 
 rule clean:
     shell:
