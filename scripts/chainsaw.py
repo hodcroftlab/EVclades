@@ -10,6 +10,7 @@ import bisect
 import sys
 import re
 from math import log
+import ipdb
 
 
 def get_parents(phy):
@@ -135,7 +136,7 @@ def mutual_info(subtrees, hema=True):
     if hema:
             pat = re.compile(r"_((?:[A-Z]\d+|[A-Z]{1,3}))_")  # match A1, A2, B1, B2, B3, US00, ... EV-D68 subgenotypes
     else:
-        pat = re.compile(".+_H[0-9]+(N[0-9]+)_.+")  # match Nn
+        pat = re.compile(r"_((?:[A-Z]\d+|[A-Z]{1,3}))_")  # match Nn
 
     total = 0  # number of tips with any HnNn label
     stcount = {}  # by subtree
@@ -147,6 +148,7 @@ def mutual_info(subtrees, hema=True):
         labels = {}  # HnNn counts in this subtree
         for tip in tips:
             matches = pat.findall(tip)
+            # ipdb.set_trace()
             if matches:
                 label = matches[0]
                 if label not in labels:

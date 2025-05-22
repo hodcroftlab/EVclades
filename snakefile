@@ -7,6 +7,8 @@ import os
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv())
 
+configfile: "config.yaml"
+
 ## Define paths
 EMAIL = os.environ.get("EMAIL") # for Entrez transactions; taken from .env file
 ID_FIELD = "accession" # accession or strain, required for augur functions
@@ -22,8 +24,7 @@ FORMAT = "labels" # "summary", "labels" or "trees"
 
 # cut-off and max-date
 MAX_DATE = "2017-01-01"
-CUTOFF = 0.008 # set to None to get a list of different cutoff values; vary between 0.005 and 0.011
-
+CUTOFF = 0.001 # set to None to get a list of different cutoff values; vary between 0.005 and 0.011
 # CUTOFFs = [0.005, 0.006,0.007, 0.008,0.009,0.01,0.011, 0.012, 0.013, 0.014, 0.015]
 # pdfunite results/plots/chainsaw-table_0.0*.pdf chainsaw-table_2018.pdf
 
@@ -38,7 +39,7 @@ wildcard_constraints:
 ## Run all rules in snakemake
 rule all:
     input:
-        expand("results/plots/chainsaw-table_{CUTOFF}_{TYPE}.pdf", TYPE=["AA", "NT"], CUTOFF=CUTOFF),
+        expand("results/plots/chainsaw-table_{CUTOFF}_{TYPE}.pdf", TYPE=["AA", "NT"], CUTOFF=config["cutoff"]),
         expand("results/plots/treeplots_{TYPE}.png", TYPE=["AA", "NT"]),
         "results/plots/genbank-nseqs.pdf",
         alignment = "results/aligned_NT.fasta"
@@ -47,7 +48,8 @@ rule all:
 
 rule all_NT:
     input:
-        expand("results/plots/chainsaw-table_{CUTOFF}_NT.pdf", CUTOFF=CUTOFF),
+        expand("results/plots/chainsaw-table_{CUTOFF}_NT.pdf", 
+               CUTOFF=[f"{config['cutoff']['NT']:.3f}"]),
         "results/plots/treeplots_NT.png",
         "results/plots/genbank-nseqs.pdf",
         "results/aligned_NT.fasta",
@@ -56,7 +58,8 @@ rule all_NT:
 
 rule all_AA:
     input:
-        expand("results/plots/chainsaw-table_{CUTOFF}_AA.pdf", CUTOFF=CUTOFF),
+        expand("results/plots/chainsaw-table_{CUTOFF}_AA.pdf", 
+               CUTOFF=[f"{config['cutoff']['AA']:.3f}"]),
         "results/plots/treeplots_AA.png",
         "results/aligned_NT.fasta"
 
@@ -256,7 +259,7 @@ rule tree:
             --override-default-args
         """
 
-# midpoint.R: not needed; done by refine "--root mid_point".
+# midpoint.R: only needed for AA; NT: done by refine "--root mid_point".
 
 rule refine:
     input:
@@ -264,18 +267,14 @@ rule refine:
         alignment="results/aligned_{TYPE}.fasta",
     output:
         tree="results/tree.midpoint_{TYPE}.nwk",
+    params:
         node_data="results/branch_lengths_{TYPE}.json",
 
     shell:
         """
         if [ "{wildcards.TYPE}" == "AA" ]; then
             echo -e "\nRunning refine_aa for AA sequences..."
-            python scripts/refine_aa.py \
-                --tree {input.tree} \
-                --alignment {input.alignment} \
-                --divergence-unit mutations-per-site \
-                --output-node-data {output.node_data} \
-                --output-tree {output.tree} 
+            Rscript scripts/midpoint.R {input.tree} {output.tree}
 
         else
             echo -e "\nRunning augur refine for NT sequences..."
@@ -285,7 +284,7 @@ rule refine:
                 --root {ROOTING} \
                 --keep-polytomies \
                 --divergence-unit mutations-per-site \
-                --output-node-data {output.node_data} \
+                --output-node-data {params.node_data} \
                 --output-tree {output.tree}
         fi
         
@@ -294,6 +293,13 @@ rule refine:
         dropped=$((input_tips - output_tips))
         echo -e "\nrefine: Dropped sequences due to clock filter: $dropped" 
         """
+
+        # python scripts/refine_aa.py \
+        #         --tree {input.tree} \
+        #         --alignment {input.alignment} \
+        #         --divergence-unit mutations-per-site \
+        #         --output-node-data {output.node_data} \
+        #         --output-tree {output.tree} 
 
 ###### node-wise clustering ######
 rule subtyping_params:
@@ -340,25 +346,6 @@ rule subtree_grid_plot:
         "Rscript scripts/subtree-grid.R {input.grid} {input.params_set} {output.out_pdf} {output.nsubtrees} "
 
 ##### edge-wise clustering #####
-rule chainsaw:
-    """
-    Partition tree by cutting on internal branches with length 
-    exceeding threshold.
-    """
-    input:
-        infile = "results/tree.midpoint_{TYPE}.nwk"
-    output:
-        outfile = "results/chainsaw.subtrees_{TYPE}.nwk" if FORMAT == "trees" else ("results/chainsaw_output_{TYPE}.csv" if CUTOFF is None else f"results/chainsaw-{CUTOFF}.{FORMAT}_{{TYPE}}.csv")  
-    params:
-        cutoff = lambda wildcards: "" if CUTOFF is None else f"--cutoff {CUTOFF}",
-        nbin = 20
-    shell:
-        """
-        echo -e "\nedge-wise clustering" 
-        python scripts/chainsaw.py {input.infile} {output.outfile} \
-        {params.cutoff} --nbin {params.nbin} --format {FORMAT}  
-        """
-
 # cutoff = None -> creates a list of different cutoff values
 rule auto_chainsaw:
     """
@@ -369,14 +356,37 @@ rule auto_chainsaw:
     input:
         "results/tree.midpoint_{TYPE}.nwk"
     output:
-        "results/chainsaw-nsubtrees_{TYPE}.csv"
+        nsubtrees = "results/chainsaw-nsubtrees_{TYPE}.csv",
+        values = "results/chainsaw_output_{TYPE}.csv"
     params:
-        gene = "full" # "full" or "VP1",
+        type = "{TYPE}", # "AA" or "NT",
+        nbin = 20
+
     shell:
         """
-        python scripts/auto-chainsaw.py {input}\
-        {params.gene} {output}
+        python scripts/chainsaw.py {input} {output.values} --nbin {params.nbin} >> {output.values} 2>&1
+        python scripts/auto-chainsaw.py {input} {params.type} {output.nsubtrees}
         """
+
+rule chainsaw:
+    """
+    Partition tree by cutting on internal branches with length 
+    exceeding threshold.
+    """
+    input:
+        infile = "results/tree.midpoint_{TYPE}.nwk"
+    output:
+        outfile = "results/chainsaw.subtrees_{TYPE}.nwk" if FORMAT == "trees" else f"results/chainsaw-{CUTOFF}.{FORMAT}_{{TYPE}}.csv"
+    params:
+        cutoff = lambda wildcards: "" if CUTOFF is None else f"--cutoff {CUTOFF}",
+        nbin = 20
+    shell:
+        """
+        echo -e "\nedge-wise clustering" 
+        python scripts/chainsaw.py {input.infile} {output.outfile} \
+        {params.cutoff} --nbin {params.nbin} --format {FORMAT}  
+        """
+
 
 ##### Plotting #####
 rule plot_trees:
@@ -390,8 +400,8 @@ rule plot_trees:
         plot_png = "results/plots/treeplots_{TYPE}.png",
         plot_pdf = "results/plots/inferred_{TYPE}.pdf"
     params:
-        replace_labels = "False",
-        cutoff_subtree = {CUTOFF},
+        replace_labels = "True",
+        cutoff_subtree = CUTOFF,
     shell:
         """
         Rscript scripts/plot-trees.R {input.tree} {output.plot_png} {output.plot_pdf} \

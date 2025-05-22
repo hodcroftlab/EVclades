@@ -13,23 +13,28 @@ output_pdf <- args[3]
 replace_labels <- args[4]
 cutoff <- args[5]
 
-# tree_file = "results/tree.midpoint.nwk"
-# output_png = "results/plots/treeplots.png"
-# output_pdf = "results/plots/inferred.pdf"
+# tree_file = "results/tree_raw_NT.nwk"
+# tree_file = "results/tree.midpoint_NT.nwk"
+# output_png = "results/plots/treeplots_NT.png"
+# output_pdf = "results/plots/inferred_NT.pdf"
 # replace_labels = "True"
+# cutoff = 0.008
 
 # while(FALSE){
   phy <- read.tree(tree_file) #"gb-relabeled-ha.ft2-mle.mid.nwk")
+  plot(phy)
   phy <- ladderize(phy)
   eL <- tree.layout(phy)  # takes a few minutes! 
-  eL$nodes$sero <- gsub("^.*_([A-Z0-9]{1,5})_.*$", "\\1", eL$nodes$label)
-  idx <- which(!grepl("^.*_([A-Z0-9]{1,5})_.*$", eL$nodes$label))
+  eL$nodes$sero <- gsub("^[^_]+_([^_]+)_.*$", "\\1", eL$nodes$label)
+  idx <- which(!grepl("^[^_]+_[A-Z0-9]+(_[0-9]+)+$", eL$nodes$label))
+  # idx <- which(!grepl("^.*_([A-Z0-9]{1,5})_.*$", eL$nodes$label))
+  
   eL$nodes$sero[idx] <- NA # nodes
   eL$nodes$sero <- toupper(eL$nodes$sero)
   
   if (replace_labels=="True"){
     output_png = sub("\\.png$", "_subtree.png", output_png)
-    new = read.csv(paste0("results/chainsaw-",cutoff,".labels.csv"))
+    new = read.csv(paste0("results/chainsaw-",cutoff,".labels_",gsub("^.*_([^_]+)\\.nwk$", "\\1", tree_file),".csv"))
     new = new %>%
       dplyr::mutate(new_tip = paste0(stringr::str_split_fixed(tip.label, "_", 2)[,1], "_S", subtree, "_1"))
     
@@ -69,7 +74,7 @@ cutoff <- args[5]
 # locate edges - this takes a while, so run once and save results!
 # while(FALSE) {
   # Extract matched serotype from each label
-  matches <- gsub("^.*_([A-Z0-9]{1,5})_.*$", "\\1", eL$nodes$label)
+  matches <- gsub("^[^_]+_([^_]+)_.*$", "\\1", eL$nodes$label)
   
   # Remove NAs or things that didn't match the pattern properly
   matches <- matches[!is.na(matches) & matches != eL$nodes$label]
@@ -143,7 +148,34 @@ for (i in 1:length(serotypes)) {
 #   colour.clade(nL, n.edges[[i]], col=pal[i], lwd=1, skip=skip, cex=0.8)
 # }
 invisible(dev.off())
-if(replace_labels=="True"){stop("turn 'replace_labels = False' to continue")}
+
+if(replace_labels=="True"){
+  phy <- read.tree(tree_file) #"gb-relabeled-ha.ft2-mle.mid.nwk")
+  plot(phy)
+  phy <- ladderize(phy)
+  eL <- tree.layout(phy)
+  eL$nodes$sero <- gsub("^[^_]+_([^_]+)_.*$", "\\1", eL$nodes$label)
+  idx <- which(!grepl("^[^_]+_[A-Z0-9]+(_[0-9]+)+$", eL$nodes$label))
+  # idx <- which(!grepl("^.*_([A-Z0-9]{1,5})_.*$", eL$nodes$label))
+  
+  eL$nodes$sero[idx] <- NA # nodes
+  eL$nodes$sero <- toupper(eL$nodes$sero)
+  
+  matches <- gsub("^[^_]+_([^_]+)_.*$", "\\1", eL$nodes$label)
+  
+  # Remove NAs or things that didn't match the pattern properly
+  matches <- matches[!is.na(matches) & matches != eL$nodes$label]
+  
+  # Count frequency of each
+  serotypes <- names(table(matches))
+  
+  # Create a list of edges for each serotype
+  edges <- lapply(1:length(serotypes), function(i) {
+    idx <- which(eL$nodes$sero == serotypes[i])
+    find.clade(eL, tips=eL$nodes$label[idx])
+  })
+  
+  }
 # get.tips in ggfree has an error - overwrite with this function
 get.tips <- function(parent, obj, res = c()) {
   children <- obj$edges$child[obj$edges$parent == parent]

@@ -2,13 +2,20 @@ suppressPackageStartupMessages({require(xtable)})
 
 args <- commandArgs(trailingOnly = TRUE)
 
-nsubtrees <- args[1] # nsubtrees <- "results/chainsaw-nsubtrees.csv"
-label <- args[2] # label <- "results/chainsaw-0.008.labels.csv"
-out_pdf <- args[3] # out_pdf <- "results/plots/chainsaw.tiff"
-out_table <- args[4] # out_table <- "results/plots/chainsaw-table.pdf"
-keep_na <- args[5] # keep_na <- "False"
-cutoff_tree <- as.numeric(args[6]) # cutoff_tree <- 0.008
+nsubtrees <- args[1] 
+label <- args[2] 
+out_pdf <- args[3] 
+out_table <- args[4] 
+keep_na <- args[5] 
+cutoff_tree <- as.numeric(args[6]) 
 # drop cutoffs that yield too many subtrees (37 trees)
+
+# nsubtrees <- "results/chainsaw-nsubtrees_AA.csv"
+# label <- "results/chainsaw-0.002.labels_AA.csv"
+# out_pdf <- "results/plots/chainsaw_AA.tiff"
+# out_table <- "results/plots/chainsaw-table_AA.pdf"
+# keep_na <- "True"
+# cutoff_tree <- 0.002
 
 rescale <- function(x, from, to) {
   # map vector `x` to range of `to`, given it comes from range of `from`
@@ -115,7 +122,9 @@ invisible(dev.off())
 # examine distribution of serotype labels among subtrees
 # if (doFull) {
 labels <- read.csv(label) # define a variable to get the different cutoffs
-pat <- "^.*_([A-Z0-9]{1,5})_.*$" # full 
+# pat <- "^.*_([A-Z0-9]{1,5})_.*$"
+pat <- "^[^_]+_([A-Z0-9]+)_[0-9]+(?:_[0-9]+)*$"
+
 # } else {
 #   labels <- read.csv("flu-results/chainsaw-NA-0.41.labels.csv")
 #   pat <- ".+_H[0-9]+(N[0-9]+)_.+"  # NA  
